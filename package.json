@@ -1,0 +1,92 @@
+{
+  "name": "empirical-sdd",
+  "version": "0.42.0",
+  "description": "Agent-neutral, resumable spec-driven development for every terminal-capable coding agent",
+  "type": "module",
+  "bin": {
+    "empirical": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
+    },
+    "./integrations": {
+      "types": "./dist/integrations.d.ts",
+      "import": "./dist/integrations.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "docs/mcp.md",
+    "docs/harness-guide.md",
+    "docs/configuration.md",
+    "docs/optional-adoption.md",
+    "docs/demo.md",
+    "docs/protocol.md",
+    "docs/tracking.md",
+    "docs/releasing.md",
+    "docs/security.md",
+    "docs/versioning.md",
+    "docs/verification-performance.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test tests --timeout 120000",
+    "test:coverage": "bun test tests --timeout 120000 --coverage --coverage-reporter=lcov --coverage-reporter=text --path-ignore-patterns=tests/linear-mcp-oauth.test.ts && bun test tests/linear-mcp-oauth.test.ts --timeout 120000 && bun run scripts/check-coverage.ts coverage/lcov.info",
+    "test:dist": "bun run build && bun run scripts/smoke-mcp.ts",
+    "prepack": "bun run build",
+    "test:package": "bun run scripts/test-package.ts",
+    "test:consistency": "bun run scripts/check-consistency.ts",
+    "benchmark:flow": "bun run scripts/benchmark-flow.ts",
+    "test:release": "bun test tests/release.test.ts --timeout 120000",
+    "release:dry-run": "bun run scripts/release.ts dry-run --fixture tests/fixtures/releases/dry-run.json",
+    "demo:integration-repair": "node dist/demo-integration-repair.js",
+    "demo:ticket-policy": "node dist/demo-ticket-policy.js",
+    "ci": "bun run check && bun run test:coverage && bun run test:dist && bun run test:package && bun run test:consistency && git diff --check"
+  },
+  "keywords": [
+    "agents",
+    "mcp",
+    "sdd",
+    "spec-driven-development",
+    "codex",
+    "claude"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/goempirical/empirical-sdd.git"
+  },
+  "bugs": {
+    "url": "https://github.com/goempirical/empirical-sdd/issues"
+  },
+  "homepage": "https://github.com/goempirical/empirical-sdd#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "smol-toml": "1.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2"
+  }
+}
