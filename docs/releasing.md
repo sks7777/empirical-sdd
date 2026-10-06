@@ -170,7 +170,7 @@ release/v<version> → develop
 
 It contains only the prepared version/changelog changes needed for the complete
 current `develop` range. Push without force and open the ordinary PR using the
-[release checklist](../.github/PULL_REQUEST_TEMPLATE/release.md). Report its URL
+release checklist template (the original `.github/PULL_REQUEST_TEMPLATE/release.md` was not preserved in this mirror). Report its URL
 and stop. Required checks and a human-controlled merge must put the exact
 candidate onto remote `develop`; the agent never merges it.
 
@@ -279,7 +279,7 @@ bun run scripts/release.ts break-glass \
   --version <VERSION> \
   --integrity <SHA512_PACK_INTEGRITY> \
   --actor <GITHUB_ADMIN_LOGIN> \
-  --incident https://github.com/goempirical/empirical-sdd/issues/<ISSUE> \
+  --incident https://github.com/<owner>/<repo>/issues/<ISSUE> \
   --justification "<PUBLIC_INCIDENT_JUSTIFICATION>" \
   --issued-at <UTC_TIMESTAMP> \
   --expires-at <UTC_TIMESTAMP_WITHIN_30_MINUTES> \

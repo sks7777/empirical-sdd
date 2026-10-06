@@ -8,9 +8,10 @@ work can resume across sessions, agents, and machines.
 
 > Empirical is alpha software and requires Node.js 22 or newer.
 
-**[Open the practical harness guide](https://goempirical.github.io/empirical-sdd/)**
-for the visual walkthrough, diagrams, generated-file explorer, and complete
-workflow. Its zero-build source is [docs/index.html](docs/index.html).
+**[Open the practical harness guide](docs/harness-guide.md)**
+for the walkthrough, checklists, and complete workflow. (The original hosted
+visual guide is no longer available; what could be recovered is mirrored under
+[docs/mirrored/](docs/mirrored/README.md).)
 
 For a short explanation of receipts, review, checkpoints and cross-machine work,
 read [Working with Empirical](docs/harness-guide.md). See the
@@ -352,7 +353,7 @@ local completion, a confirmed release, or production deployment. See
 
 ## Documentation
 
-- [Practical guide](https://goempirical.github.io/empirical-sdd/) — visual onboarding and diagrams
+- [Practical guide](docs/harness-guide.md) — walkthrough, checklists, and workflow
 - [Demo](docs/demo.md) — installation and representative scenarios
 - [Protocol](docs/protocol.md) — state machine, artifacts, and completion rules
 - [Architecture](docs/architecture.md) — persistence and trust boundaries
