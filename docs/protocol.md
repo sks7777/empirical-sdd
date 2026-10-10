@@ -829,7 +829,8 @@ capability write. Independent integration replay still runs in the target, witho
 **Deliver** resolves exact local proof, then carry-over, then remote eligibility.
 Explicit `local`, or no GitHub delivery, stops at the missing local receipt.
 Explicit `remote-checks` checks eligibility before any push. Under `auto`,
-Deliver may push and open the source pull request either way. It then polls for
+Deliver may push and open the source pull request either way, but only after
+implementation and feature verification are complete. It then polls for
 proof before check waiting, review, ready and merge, returning
 `promotion-proof-required` with the reasons and `route: "ci"` while it is not
 satisfied (terminal reasons stop polling). Under `auto`, an ineligible result
@@ -1006,7 +1007,7 @@ bounded credential-safe failure context without contacting the provider.
 .empirical/capabilities/<capability>/spec.md
 .empirical/mockups/decision.md                 # app mockups adopted or declined
 .empirical/specs/<feature>/state.json
-.empirical/specs/<feature>/closure.json        # written once, only by a forced closure
+.empirical/specs/<feature>/closure.json        # forced closure record; v2 adds a folded records index
 .empirical/specs/<feature>/mockups/approval.md # approved before the contract freezes
 .empirical/specs/<feature>/mockups/fidelity.md # what was built against what was approved
 .empirical/specs/<feature>/impact.json
@@ -1044,6 +1045,18 @@ Reusing the terminal phase and status keeps selection release, recovery
 bookkeeping and journal compaction unchanged; the field is emitted only when a
 closure exists, so every earlier state keeps identical bytes and Schema 5 needs
 no migration.
+
+`closure.json` is version 1 (the closure record alone) when a forced closure
+writes it. Version 2 (`schemaVersion: 2`, digest-verified) adds a small
+`records` index for a merged feature whose bulky proof records — evidence
+receipts and artifacts, reviews, consults, integration and delivery receipts —
+are folded out of the tree; Git history keeps the originals, and
+`recordsCommit` names the last commit that holds them. Readers accept a folded
+feature: tracker projection rebuilds its artifact entries from the index and
+never re-uploads them, lifecycle recording asks for a fresh `receipt: "command"`
+observation instead of a folded receipt, and Doctor validates the index
+(`CLOSURE_RECORDS_INVALID`) without reporting the folded files as missing.
+Nothing writes version 2 yet.
 
 Closure records nothing about what the feature achieved. It carries completion
 facts through unchanged, re-derives them, and refuses any change of rank, so a

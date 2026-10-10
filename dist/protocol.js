@@ -14675,6 +14675,7 @@ __export(exports_protocol, {
   verifyTrackerWaiver: () => verifyTrackerWaiver,
   verifyReceiptDigest: () => verifyReceiptDigest,
   verifyImpactManifest: () => verifyImpactManifest,
+  verifyFeatureClosureFile: () => verifyFeatureClosureFile,
   verifyFeatureClosure: () => verifyFeatureClosure,
   verifyFastImpactManifest: () => verifyFastImpactManifest,
   verifyAuthorization: () => verifyAuthorization,
@@ -14699,6 +14700,7 @@ __export(exports_protocol, {
   impactManifestSchema: () => impactManifestSchema,
   featureLifecycleSchema: () => featureLifecycleSchema,
   featureClosureSchema: () => featureClosureSchema,
+  featureClosureFileSchema: () => featureClosureFileSchema,
   fastImpactManifestSchema: () => fastImpactManifestSchema,
   externalMergeFactsSchema: () => externalMergeFactsSchema,
   executionModeSchema: () => executionModeSchema,
@@ -14714,12 +14716,14 @@ __export(exports_protocol, {
   criterionSchema: () => criterionSchema,
   createTrackerWaiver: () => createTrackerWaiver,
   createImpactManifest: () => createImpactManifest,
+  createFeatureClosureFile: () => createFeatureClosureFile,
   createFeatureClosure: () => createFeatureClosure,
   createFastImpactManifest: () => createFastImpactManifest,
   createAuthorization: () => createAuthorization,
   completionLevelSchema: () => completionLevelSchema,
   commandPolicySchema: () => commandPolicySchema,
   collectedReceiptSchema: () => collectedReceiptSchema,
+  closureRecordsSchema: () => closureRecordsSchema,
   closureOutcomeSchema: () => closureOutcomeSchema,
   canonicalJson: () => canonicalJson,
   authorizationSchema: () => authorizationSchema,
@@ -14871,6 +14875,24 @@ function verifyFeatureClosure(closure) {
     throw new Error("Feature closure digest does not match its contents.");
   }
 }
+function createFeatureClosureFile(input) {
+  const body = { schemaVersion: 2, ...input };
+  const file2 = featureClosureFileSchema.parse({ ...body, digest: digestJson(body) });
+  verifyFeatureClosureFile(file2);
+  return file2;
+}
+function verifyFeatureClosureFile(file2) {
+  const parsed = featureClosureFileSchema.parse(file2);
+  const { digest, ...body } = parsed;
+  if (digestJson(body) !== digest) {
+    throw new Error("Feature closure file digest does not match its contents.");
+  }
+  if (parsed.closure)
+    verifyFeatureClosure(parsed.closure);
+  if (new Set(parsed.records.receipts.map((receipt) => receipt.id)).size !== parsed.records.receipts.length) {
+    throw new Error("Feature closure file repeats a folded receipt.");
+  }
+}
 function createTrackerWaiver(input) {
   assertBoundedJustification(input.justification, "Tracker waiver justification");
   const body = { schemaVersion: 1, ...input };
@@ -14928,7 +14950,7 @@ function verifyReceiptDigest(receipt) {
     throw new Error(`Evidence receipt ${parsed.id} has an asserted result inconsistent with its provenance.`);
   }
 }
-var MAX_COMMAND_TIMEOUT_MS = 2700000, SCHEMA_VERSION = 5, POLICY_SCHEMA_VERSION = 2, MANIFEST_SCHEMA_VERSION = 2, RECEIPT_SCHEMA_VERSION = 1, PRODUCT_VERSION = "0.42.0", workflowSchema, featureLifecycleSchema, directPauseSchema, sizeDecisionSchema, defaultModeSchema, directActionSchema, executionModeSchema, verificationProfileSchema, promotionFullCiSchema, promotionBindingSchema, riskFloorSchema, completionLevelSchema, phaseSchema, workflowStatusSchema, criterionSchema, evidenceKindSchema, qaCheckKindSchema, qaAttemptOutcomeSchema, MAX_SCOPE_ENTRIES = 32, MAX_SCOPE_ENTRY_LENGTH = 200, commandPolicySchema, evidencePolicySchema, projectPolicySchema, impactManifestSchema, fastImpactManifestSchema, authorizationSchema, reviewCoverageSchema, closureOutcomeSchema, externalMergeFactsSchema, featureClosureSchema, trackerWaiverReasonSchema, trackerWaiverSchema, COMPLETION_ORDER, receiptProvenanceSchema, receiptBaseSchema, executedReceiptSchema, artifactRecordSchema, qaCommandRecordSchema, qaResultRecordSchema, qaAttemptSchema, qaReceiptSchema, collectedReceiptSchema, gitSha40Schema, githubDecimalIdSchema, githubCheckNameSchema, remoteChecksReceiptSchema, evidenceReceiptSchema;
+var MAX_COMMAND_TIMEOUT_MS = 2700000, SCHEMA_VERSION = 5, POLICY_SCHEMA_VERSION = 2, MANIFEST_SCHEMA_VERSION = 2, RECEIPT_SCHEMA_VERSION = 1, PRODUCT_VERSION = "0.43.0", workflowSchema, featureLifecycleSchema, directPauseSchema, sizeDecisionSchema, defaultModeSchema, directActionSchema, executionModeSchema, verificationProfileSchema, promotionFullCiSchema, promotionBindingSchema, riskFloorSchema, completionLevelSchema, phaseSchema, workflowStatusSchema, criterionSchema, evidenceKindSchema, qaCheckKindSchema, qaAttemptOutcomeSchema, MAX_SCOPE_ENTRIES = 32, MAX_SCOPE_ENTRY_LENGTH = 200, commandPolicySchema, evidencePolicySchema, projectPolicySchema, impactManifestSchema, fastImpactManifestSchema, authorizationSchema, reviewCoverageSchema, closureOutcomeSchema, externalMergeFactsSchema, featureClosureSchema, sha256DigestSchema, foldedPathSchema, closureRecordsSchema, featureClosureFileSchema, trackerWaiverReasonSchema, trackerWaiverSchema, COMPLETION_ORDER, receiptProvenanceSchema, receiptBaseSchema, executedReceiptSchema, artifactRecordSchema, qaCommandRecordSchema, qaResultRecordSchema, qaAttemptSchema, qaReceiptSchema, collectedReceiptSchema, gitSha40Schema, githubDecimalIdSchema, githubCheckNameSchema, remoteChecksReceiptSchema, evidenceReceiptSchema;
 var init_protocol = __esm(() => {
   init_zod();
   init_justification();
@@ -15152,6 +15174,47 @@ var init_protocol = __esm(() => {
     externalMerge: externalMergeFactsSchema.optional(),
     closedAt: exports_external.string().datetime({ offset: true }),
     digest: exports_external.string().regex(/^sha256:[a-f0-9]{64}$/)
+  }).strict();
+  sha256DigestSchema = exports_external.string().regex(/^sha256:[a-f0-9]{64}$/);
+  foldedPathSchema = exports_external.string().min(1).max(512).regex(/^(?!\/)(?![a-zA-Z]:)(?!(?:.*\/)?\.\.(?:\/|$))[^\\\u0000-\u001f]+$/);
+  closureRecordsSchema = exports_external.object({
+    foldedAt: exports_external.string().datetime({ offset: true }),
+    recordsCommit: exports_external.string().regex(/^[a-f0-9]{40}$/).nullable(),
+    recordsDigest: sha256DigestSchema,
+    foldedPaths: exports_external.array(foldedPathSchema).max(5000),
+    receipts: exports_external.array(exports_external.object({
+      id: exports_external.string().regex(/^(?:executed|collected|qa|remote-checks)-[a-z0-9-]{1,120}$/),
+      kind: exports_external.enum(["collected", "executed", "qa", "remote-checks"]),
+      checkId: exports_external.string().min(1).max(128).nullable(),
+      criteria: exports_external.array(exports_external.string().regex(/^AC-[A-Z0-9]+(?:-[A-Z0-9]+)*$/).max(64)).max(200),
+      passed: exports_external.boolean(),
+      digest: sha256DigestSchema,
+      artifacts: exports_external.array(exports_external.object({
+        path: foldedPathSchema,
+        mediaType: exports_external.string().min(1).max(128),
+        bytes: exports_external.number().int().nonnegative(),
+        digest: sha256DigestSchema
+      }).strict()).max(400)
+    }).strict()).max(500),
+    review: exports_external.object({
+      verdict: exports_external.string().min(1).max(64),
+      findings: exports_external.number().int().nonnegative(),
+      blocking: exports_external.number().int().nonnegative(),
+      deferredFindingIds: exports_external.array(exports_external.string().min(1).max(128)).max(500)
+    }).strict().nullable(),
+    consults: exports_external.array(exports_external.object({
+      specialist: exports_external.string().min(1).max(128),
+      verdict: exports_external.string().min(1).max(64)
+    }).strict()).max(100),
+    integration: exports_external.object({ digest: sha256DigestSchema }).strict().nullable(),
+    delivery: exports_external.object({ digest: sha256DigestSchema }).strict().nullable()
+  }).strict();
+  featureClosureFileSchema = exports_external.object({
+    schemaVersion: exports_external.literal(2),
+    feature: exports_external.string().regex(/^[a-z0-9][a-z0-9-]*$/).max(80),
+    closure: featureClosureSchema.nullable(),
+    records: closureRecordsSchema,
+    digest: sha256DigestSchema
   }).strict();
   trackerWaiverReasonSchema = exports_external.enum(["tracked-elsewhere", "abandoned"]);
   trackerWaiverSchema = exports_external.object({
@@ -15397,6 +15460,7 @@ export {
   verifyTrackerWaiver,
   verifyReceiptDigest,
   verifyImpactManifest,
+  verifyFeatureClosureFile,
   verifyFeatureClosure,
   verifyFastImpactManifest,
   verifyAuthorization,
@@ -15421,6 +15485,7 @@ export {
   impactManifestSchema,
   featureLifecycleSchema,
   featureClosureSchema,
+  featureClosureFileSchema,
   fastImpactManifestSchema,
   externalMergeFactsSchema,
   executionModeSchema,
@@ -15436,12 +15501,14 @@ export {
   criterionSchema,
   createTrackerWaiver,
   createImpactManifest,
+  createFeatureClosureFile,
   createFeatureClosure,
   createFastImpactManifest,
   createAuthorization,
   completionLevelSchema,
   commandPolicySchema,
   collectedReceiptSchema,
+  closureRecordsSchema,
   closureOutcomeSchema,
   canonicalJson,
   authorizationSchema,

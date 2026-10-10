@@ -129,6 +129,8 @@ export declare class EmpiricalProject {
     executeEvidence(input: ExecuteEvidenceInput): Promise<EvidenceReceipt>;
     /** Configured argv, narrowed to changed-file tests when the command opts in. */
     private commandArgv;
+    /** Tests the active feature's plan lists under `## Affected tests`; empty without a plan. */
+    private planDeclaredTests;
     /** Narrow follow-ups from the latest passing run of this same configured command. */
     private changedTestsBase;
     collectEvidence(input: CollectEvidenceInput): Promise<EvidenceReceipt>;

@@ -79,6 +79,15 @@ executable handoff support.
   read-only `empirical_doctor` report already named. Form elicitation binds the
   apply to the plan shown there; a host without forms must relay the previewed
   `revision` for closure or `planDigest` for cleanup.
+- When the approval form does not appear: some hosts advertise forms but
+  never show them, answering decline at once or letting the request time out.
+  Every declined or unanswered form (`*_DECLINED`, `APPROVAL_NOT_RECEIVED`)
+  changes nothing and carries `details.terminalCommand`, for example
+  `empirical reconcile`. Ask the user to run it in a terminal at the repository
+  root: it shows the same plan and asks there, recorded as `confirmation:
+  "cli"`. Do not retry the approval through the tool. The approval commands are
+  public: `empirical reconcile`, `doctor-fix`, `cleanup`, `feature-close` and
+  `qa-approve`.
 - Reconciling merged work: `empirical_reconcile` lists every unfinished feature
   with the merged pull request that carried its specification into the target
   branch, found from the spec's last commit without a pull request number, and
@@ -156,12 +165,13 @@ Schema-5 integration requirement.
    covers one run, not later edits. Keep unrun checks pending and return control
    without repeatedly asking. Required evidence gates remain unsatisfied until
    real receipts exist; review remains separate from fresh-context QA.
-   Ship early: open a draft pull request at the first coherent commit of feature
-   work and push every commit. Commits and pushes never wait on test runs; run
-   the change's tests in the background and continue. Heavy or full-suite runs
-   belong to pull-request CI, or run locally only with explicit approval. This
-   push authority covers only the agent's own feature branch and draft pull
-   requests: never merge, never push to a protected or target branch, never
+   Commit and push coherent work on the agent's own feature branch while
+   requested or required checks run, but do not open a pull request during
+   Implement, Review, or Verify. Complex work may open one only after it reaches
+   verified Integrate. Fast work finishes implemented and unverified, so promote
+   it to Complex and complete verification first. Heavy or full-suite runs may
+   still belong to pull-request CI after creation, or run locally only with
+   explicit approval. Never merge, push to a protected or target branch, or
    force push. Without a remote or `gh`, say so and continue locally.
 8. New Complex features and promoted Fast work run Review before Verify;
    existing features retain their saved order. Verify preserves the approval
@@ -215,18 +225,17 @@ Schema-5 integration requirement.
      3. `follow-up`: when a tracker is configured and findings were deferred,
         offer the user one follow-up ticket for them; create it only on a yes,
         then record it with `empirical_review_defer` and its `ticket`.
-     4. `open-pr`: open a draft pull request and hand full proof to CI.
-     5. `stop`.
+     4. `stop`.
    - Non-blocking findings are deferred automatically when the review is
      recorded, so they never start another fix lap; `openNonBlockingFindingIds`
      is then empty and `deferredFindingIds` lists them.
    - The round counts only recorded review results that requested changes;
      Verify failures never count.
    - One repair round is the budget. When a second review still requests
-     changes, `triage.mustChoose` is true and the exits start with converging:
-     `open-pr` (open or merge the pull request and track what remains), then
-     one more `fix` lap with its cost, then `stop`. The agent presents them and
-     waits for the user's choice; it never starts a further lap on its own.
+     changes, `triage.mustChoose` is true and the exits are one more `fix` lap
+     with its cost or `stop`. A pull request is not an exit before verification
+     completes. The agent presents the choices and waits; it never starts a
+     further lap on its own.
    - `empirical_review_defer` takes `findingIds`, a `reason` and a
      `ticket` (tracker id or URL). It is written to
      `review-deferrals.json` and bound to the current result digest.
@@ -279,8 +288,8 @@ Schema-5 integration requirement.
    `budget` (minutes per lane; defaults Fast 30, Quick 60, Complex 120) plus
    recorded extensions. When `over` is true, or Review sent the work back to
    Implement, `waitingOn` starts with a `decision` checkpoint and `nextAction`
-   names the exits: ship as is (draft PR), split, defer non-blocking findings,
-   continue with a new budget, or stop. Stop there and wait for the user's
+   names the exits: split, defer non-blocking findings, continue with a new
+   budget, or stop. Pull-request creation waits for verified Integrate. Stop there and wait for the user's
    choice. `empirical_checkpoint` with `revision` and `extendMinutes` (1 to
    10080) records the continue choice as one journal event and sets this
    feature's budget to the active time already used plus `extendMinutes`; the
@@ -1098,8 +1107,8 @@ as form support; one that advertises elicitation without forms fails with
 `FULL_SUITE_APPROVAL_FORM_REQUIRED`. Only a host that advertises no elicitation
 records `confirmation: "agent-relayed"`, so call it only after the user's
 explicit yes in the conversation. Approving never changes workflow state or the
-revision, and a repeated approval converges on the first record. The private
-CLI is `empirical __internal qa-approve --revision N --command ID
+revision, and a repeated approval converges on the first record. The public
+CLI is `empirical qa-approve --revision N --command ID
 --estimate-ms MS|unknown`: an interactive terminal confirms with `y/N` (recorded
 as `cli`), and non-interactive input requires `--yes` (recorded as
 `cli-unattended`), passed only after the user's explicit yes and never after a
@@ -1314,7 +1323,7 @@ digest. Notification flushing waits at most one second for a slow client.
 - run a smaller configured command that covers the check (Verify needs one command per check, not the full suite);
 - hand the full suite to pull-request CI;
 - raise that command's `timeoutMs` in the policy, up to the maximum (15 minutes); this changes the policy, so earlier receipts need a new run;
-- stop, or ship as is with a draft pull request (the checkpoint exits).
+- stop. A timed-out required check cannot be replaced by opening a pull request.
 
 A later passing attempt clears the decision. Before a run estimated near its timeout or longer than ten minutes, the agent offers the background run first.
 Receipt `attempt.durationMs` continues to measure the command itself, so it must
@@ -1339,7 +1348,8 @@ On route `ci` under `auto`, Integrate needs no full-CI receipt and records
 `promotionRoute` in its integration receipt. Under explicit
 `promotion.fullCi: "remote-checks"`, Integrate can accept passing required GitHub
 checks for an exact commit that is already pushed. Without a local receipt under
-either mode, Deliver may push and open the source pull request, then returns
+either mode, Deliver may push and open the source pull request only after
+implementation and feature verification are complete, then returns
 `{ "outcome": "promotion-proof-required", "stage": "source", "pullRequest", "reasons", "route" }`
 until the checks pass on the exact head; it requests no review, ready transition,
 merge or evidence pull request before that. `route` is `ci` while waiting. Under
@@ -1434,8 +1444,9 @@ decision, receipt, tracker update or worktree proposal, no reading of
 lint, typecheck or build unless the user asks for one. Direct turns make no
 Empirical call at all; `empirical_direct` exists only for the three transitions
 below and never returns an action packet with criteria, never executes a
-configured command, and never pushes, merges, tags or publishes. The agent
-itself follows the Ship early rule of the agent contract in direct turns too.
+configured command, and never pushes, merges, tags or publishes. The agent may
+push its own branch, but opens a pull request only after an explicit user request
+and after implementation and the requested checks are complete.
 
 `empirical_direct` accepts `action` (`pause`, `resume` or `track`), `revision`
 (required for `pause` and `resume`), `profile` (`fast` by default, or `complex`,

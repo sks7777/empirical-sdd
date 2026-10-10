@@ -5,7 +5,7 @@ export declare const SCHEMA_VERSION: 5;
 export declare const POLICY_SCHEMA_VERSION: 2;
 export declare const MANIFEST_SCHEMA_VERSION: 2;
 export declare const RECEIPT_SCHEMA_VERSION: 1;
-export declare const PRODUCT_VERSION = "0.42.0";
+export declare const PRODUCT_VERSION = "0.43.0";
 export declare const workflowSchema: z.ZodEnum<{
     complex: "complex";
     fast: "fast";
@@ -446,6 +446,155 @@ export type ExternalMergeFacts = z.infer<typeof externalMergeFactsSchema>;
 export type FeatureClosure = z.infer<typeof featureClosureSchema>;
 export declare function createFeatureClosure(input: Omit<FeatureClosure, "schemaVersion" | "digest">): FeatureClosure;
 export declare function verifyFeatureClosure(closure: FeatureClosure): void;
+/**
+ * A small index of a merged feature's bulky proof records, folded out of the
+ * tree once its pull request merged. Git history keeps the original files;
+ * `recordsCommit` names the last commit that still contains them.
+ */
+export declare const closureRecordsSchema: z.ZodObject<{
+    foldedAt: z.ZodString;
+    recordsCommit: z.ZodNullable<z.ZodString>;
+    recordsDigest: z.ZodString;
+    foldedPaths: z.ZodArray<z.ZodString>;
+    receipts: z.ZodArray<z.ZodObject<{
+        id: z.ZodString;
+        kind: z.ZodEnum<{
+            collected: "collected";
+            executed: "executed";
+            qa: "qa";
+            "remote-checks": "remote-checks";
+        }>;
+        checkId: z.ZodNullable<z.ZodString>;
+        criteria: z.ZodArray<z.ZodString>;
+        passed: z.ZodBoolean;
+        digest: z.ZodString;
+        artifacts: z.ZodArray<z.ZodObject<{
+            path: z.ZodString;
+            mediaType: z.ZodString;
+            bytes: z.ZodNumber;
+            digest: z.ZodString;
+        }, z.core.$strict>>;
+    }, z.core.$strict>>;
+    review: z.ZodNullable<z.ZodObject<{
+        verdict: z.ZodString;
+        findings: z.ZodNumber;
+        blocking: z.ZodNumber;
+        deferredFindingIds: z.ZodArray<z.ZodString>;
+    }, z.core.$strict>>;
+    consults: z.ZodArray<z.ZodObject<{
+        specialist: z.ZodString;
+        verdict: z.ZodString;
+    }, z.core.$strict>>;
+    integration: z.ZodNullable<z.ZodObject<{
+        digest: z.ZodString;
+    }, z.core.$strict>>;
+    delivery: z.ZodNullable<z.ZodObject<{
+        digest: z.ZodString;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+/** closure.json v2: the closure decision (null for a plain merge) plus the folded records index. */
+export declare const featureClosureFileSchema: z.ZodObject<{
+    schemaVersion: z.ZodLiteral<2>;
+    feature: z.ZodString;
+    closure: z.ZodNullable<z.ZodObject<{
+        schemaVersion: z.ZodLiteral<1>;
+        outcome: z.ZodEnum<{
+            abandoned: "abandoned";
+            "merged-externally": "merged-externally";
+            superseded: "superseded";
+        }>;
+        reason: z.ZodString;
+        actor: z.ZodString;
+        confirmation: z.ZodEnum<{
+            "agent-relayed": "agent-relayed";
+            cli: "cli";
+            "cli-unattended": "cli-unattended";
+            elicited: "elicited";
+            "merge-observed": "merge-observed";
+        }>;
+        closedAtPhase: z.ZodEnum<{
+            archive: "archive";
+            context: "context";
+            deliver: "deliver";
+            design: "design";
+            done: "done";
+            idle: "idle";
+            implement: "implement";
+            integrate: "integrate";
+            plan: "plan";
+            publish: "publish";
+            review: "review";
+            shape: "shape";
+            specify: "specify";
+            verify: "verify";
+        }>;
+        completionAtClosure: z.ZodEnum<{
+            delivered: "delivered";
+            implemented: "implemented";
+            integrated: "integrated";
+            none: "none";
+            published: "published";
+            verified: "verified";
+        }>;
+        externalMerge: z.ZodOptional<z.ZodObject<{
+            pullRequest: z.ZodNumber;
+            url: z.ZodString;
+            state: z.ZodLiteral<"MERGED">;
+            mergeCommit: z.ZodString;
+            targetBranch: z.ZodString;
+            ancestorOfTarget: z.ZodLiteral<true>;
+            observedAt: z.ZodString;
+        }, z.core.$strict>>;
+        closedAt: z.ZodString;
+        digest: z.ZodString;
+    }, z.core.$strict>>;
+    records: z.ZodObject<{
+        foldedAt: z.ZodString;
+        recordsCommit: z.ZodNullable<z.ZodString>;
+        recordsDigest: z.ZodString;
+        foldedPaths: z.ZodArray<z.ZodString>;
+        receipts: z.ZodArray<z.ZodObject<{
+            id: z.ZodString;
+            kind: z.ZodEnum<{
+                collected: "collected";
+                executed: "executed";
+                qa: "qa";
+                "remote-checks": "remote-checks";
+            }>;
+            checkId: z.ZodNullable<z.ZodString>;
+            criteria: z.ZodArray<z.ZodString>;
+            passed: z.ZodBoolean;
+            digest: z.ZodString;
+            artifacts: z.ZodArray<z.ZodObject<{
+                path: z.ZodString;
+                mediaType: z.ZodString;
+                bytes: z.ZodNumber;
+                digest: z.ZodString;
+            }, z.core.$strict>>;
+        }, z.core.$strict>>;
+        review: z.ZodNullable<z.ZodObject<{
+            verdict: z.ZodString;
+            findings: z.ZodNumber;
+            blocking: z.ZodNumber;
+            deferredFindingIds: z.ZodArray<z.ZodString>;
+        }, z.core.$strict>>;
+        consults: z.ZodArray<z.ZodObject<{
+            specialist: z.ZodString;
+            verdict: z.ZodString;
+        }, z.core.$strict>>;
+        integration: z.ZodNullable<z.ZodObject<{
+            digest: z.ZodString;
+        }, z.core.$strict>>;
+        delivery: z.ZodNullable<z.ZodObject<{
+            digest: z.ZodString;
+        }, z.core.$strict>>;
+    }, z.core.$strict>;
+    digest: z.ZodString;
+}, z.core.$strict>;
+export type ClosureRecords = z.infer<typeof closureRecordsSchema>;
+export type FeatureClosureFile = z.infer<typeof featureClosureFileSchema>;
+export declare function createFeatureClosureFile(input: Omit<FeatureClosureFile, "schemaVersion" | "digest">): FeatureClosureFile;
+export declare function verifyFeatureClosureFile(file: FeatureClosureFile): void;
 export declare const trackerWaiverReasonSchema: z.ZodEnum<{
     abandoned: "abandoned";
     "tracked-elsewhere": "tracked-elsewhere";

@@ -9,9 +9,8 @@ work can resume across sessions, agents, and machines.
 > Empirical is alpha software and requires Node.js 22 or newer.
 
 **[Open the practical harness guide](docs/harness-guide.md)**
-for the walkthrough, checklists, and complete workflow. (The original hosted
-visual guide is no longer available; what could be recovered is mirrored under
-[docs/mirrored/](docs/mirrored/README.md).)
+for the visual walkthrough, diagrams, generated-file explorer, and complete
+workflow. (The original hosted visual guide is no longer available; what could be recovered is mirrored under [docs/mirrored/](docs/mirrored/README.md).)
 
 For a short explanation of receipts, review, checkpoints and cross-machine work,
 read [Working with Empirical](docs/harness-guide.md). See the
@@ -282,15 +281,16 @@ When CI is not available, agents ask before a full regression at the end, run
 it in the background with your approval, keep working, and rerun only the
 failing test files if it fails.
 
-### Ship early
+### Pull requests after verification
 
-Agents open a draft pull request at the first coherent commit of feature work
-and push every commit. Commits and pushes never wait on tests: the change's
-tests run in the background while work continues, and heavy or full-suite runs
-belong to pull-request CI unless you approve a local run. This authority covers
-only the agent's own feature branch and draft pull requests; agents never merge,
-never push to protected or target branches, and never force push. Without a
-remote or `gh`, the agent says so and continues locally.
+Agents can commit and push coherent work on their own feature branch while
+requested checks run, but they do not open a pull request during Implement,
+Review, or Verify. Complex work first becomes pull-request ready at verified
+Integrate. Fast work finishes implemented and unverified, so it must be promoted
+to Complex and verified before an agent opens a pull request. Pull-request CI
+may still run the heavier regression checks after creation. Agents never merge,
+push to protected or target branches, or force push. Without a remote or `gh`,
+the agent says so and continues locally.
 
 Existing repositories need their managed skills refreshed with `empirical-init`
 and a restarted agent session after upgrading to receive this guidance.
@@ -353,7 +353,7 @@ local completion, a confirmed release, or production deployment. See
 
 ## Documentation
 
-- [Practical guide](docs/harness-guide.md) — walkthrough, checklists, and workflow
+- [Practical guide](docs/harness-guide.md) — visual onboarding and diagrams
 - [Demo](docs/demo.md) — installation and representative scenarios
 - [Protocol](docs/protocol.md) — state machine, artifacts, and completion rules
 - [Architecture](docs/architecture.md) — persistence and trust boundaries

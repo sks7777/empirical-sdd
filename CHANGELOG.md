@@ -8,6 +8,65 @@ under the alpha rules in [docs/versioning.md](docs/versioning.md).
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-10-07
+
+### Added
+
+- `closure.json` can carry a folded records index (C1, part 1). Version 2 of
+  the file records, for a merged feature, a small index of its proof records
+  (receipts and their artifacts, review, consults, integration and delivery
+  digests) so a later release can remove the bulky originals, which Git
+  history keeps. Tracker projection, lifecycle recording, Verify and Doctor
+  already accept a folded feature. Nothing is folded yet.
+
+### Changed
+
+- Pull requests now wait for completed implementation and feature verification.
+  - Agents may continue committing and pushing their own feature branch while
+    requested checks run, but generated guidance forbids pull-request creation
+    during Implement, Review, or Verify.
+  - Complex work first opens its pull request from verified Integrate. Fast
+    work remains implemented and unverified, so it must be promoted and
+    verified before opening one.
+  - Review-repair and time-budget checkpoints no longer offer an unverified
+    draft pull request as an exit. Full regression may still run in PR CI after
+    the feature gate passes.
+  - Deliver refuses incomplete implementation or verification before any
+    GitHub command or promotion-proof lookup.
+- Verify can run the tests a plan declares instead of following every import.
+  In this repository a change to `src/core.ts` selects 58 of 88 test files,
+  and a change to `src/types.ts` selects 77, which is refused with
+  `TOO_MANY_CHANGED_TESTS`.
+  - List the test files under an `## Affected tests` heading in the feature's
+    `plan.md`, one path per item. Those files plus any changed test files are
+    the selection, and the receipt records the method as `plan-declared`.
+  - Without the heading, or when none of the listed files exist, selection
+    follows imports and file names as before.
+  - The Plan phase instruction asks for the list, and the
+    `TOO_MANY_CHANGED_TESTS` message points to it.
+
+### Fixed
+
+- An approval that a host never shows no longer leaves you stuck (SDD-164).
+  Claude Desktop answered Empirical's approval form as declined without
+  showing it, and the Claude Code terminal let it time out after about a
+  minute, so reconcile, Doctor fixes, cleanup, forced closure and full-suite
+  approval could not be applied from either.
+  - A declined or unanswered form still changes nothing, and now names the
+    terminal command that shows the same plan and asks there, for example
+    `empirical reconcile`. The command is also in `details.terminalCommand`.
+  - `empirical reconcile`, `doctor-fix`, `cleanup`, `feature-close` and
+    `qa-approve` are public commands. They used to need the private
+    `__internal` prefix, and without it they failed with `UNKNOWN_COMMAND`.
+  - An agent still cannot approve its own closure where the host advertises
+    forms.
+- Files under `.empirical/` no longer select tests by file name. A spec record
+  named `review-baseline.json` selected `tests/review-baseline.test.ts`.
+
+### Migration
+
+No migration required.
+
 ## [0.42.0] - 2026-10-01
 
 ### Changed
@@ -1663,6 +1722,7 @@ Published through GitHub Actions trusted publishing with npm provenance.
 - Prepared and released package version `0.20.2`.
 
 [Unreleased]: https://registry.npmjs.org/empirical-sdd
+[0.43.0]: https://registry.npmjs.org/empirical-sdd/-/empirical-sdd-0.43.0.tgz
 [0.42.0]: https://registry.npmjs.org/empirical-sdd/-/empirical-sdd-0.42.0.tgz
 [0.41.0]: https://registry.npmjs.org/empirical-sdd/-/empirical-sdd-0.41.0.tgz
 [0.40.0]: https://registry.npmjs.org/empirical-sdd/-/empirical-sdd-0.40.0.tgz

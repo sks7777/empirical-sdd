@@ -24,8 +24,8 @@ export declare const COMPLEX_REVIEW_FIRST_ORDER: readonly ["specify", "design", 
 /** The phase order this feature follows. */
 export declare function phaseOrderFor(state: Pick<WorkflowState, "profile" | "reviewFirst">): readonly Phase[];
 /** Standard binding ends at the merge: there is nothing to run after Verify. */
-export declare const MERGE_WAIT_TEXT = "Merge of this feature's pull request; the merge closes the feature as integrated";
-export declare const MERGE_NEXT_ACTION = "Commit and push the branch, then merge its pull request after its checks pass; Empirical closes the feature as integrated when it sees the merge";
+export declare const MERGE_WAIT_TEXT = "Open and merge this verified feature's pull request; the merge closes the feature as integrated";
+export declare const MERGE_NEXT_ACTION = "Commit and push the verified branch, open its pull request, then merge it after its checks pass; Empirical closes the feature as integrated when it sees the merge";
 /** Longest one-line waitingOn text; the full message stays in rationale.reason. */
 export declare const WAITING_TEXT_LIMIT = 160;
 export interface RoadmapCommandPrefix {
@@ -168,7 +168,7 @@ export declare function phaseProgress(state: Pick<WorkflowState, "profile" | "re
 /** Pure and clock-free: equal inputs always produce an identical roadmap. Null while idle. */
 export declare function roadmapFor(input: RoadmapInput): Roadmap | null;
 /** Checkpoint exits offered whenever the budget is exceeded or a verification lap restarts. */
-export declare const CHECKPOINT_EXITS: readonly ["ship as is (open or update a draft PR)", "split", "defer non-blocking findings", "continue with a new budget", "stop"];
+export declare const CHECKPOINT_EXITS: readonly ["split", "defer non-blocking findings", "continue with a new budget", "stop"];
 /** The feature's elapsed time as the roadmap reports it; zero when timestamps are unreadable. */
 export declare function roadmapElapsedMs(timeline: RoadmapTimeline): number;
 /**

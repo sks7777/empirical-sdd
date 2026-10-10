@@ -198,6 +198,7 @@ export interface ReviewRerunCost {
     reReview: true;
 }
 export interface ReviewTriageExit {
+    /** open-pr is retained for legacy consumers; current review triage never offers it. */
     id: "fix" | "defer" | "follow-up" | "open-pr" | "stop";
     label: string;
     available: boolean;

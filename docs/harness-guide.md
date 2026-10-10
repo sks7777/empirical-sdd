@@ -28,23 +28,27 @@ For non-UI Complex work, a current approved review also covers the extra fresh-c
 
 | Action | What can block it |
 | --- | --- |
-| Edit, commit, push your feature branch, open a draft PR | Repository/forge permissions and your authorization; pending tests do not impose a workflow gate. |
+| Edit, commit, push your feature branch | Repository/forge permissions; pending tests do not block branch progress. |
+| Open a pull request | Complex implementation, review and feature verification must be complete; the feature is in verified Integrate. |
 | Start an independent feature in another worktree | Its own setup and ownership; another feature's review, tests or closure do not block it. |
 | Mark this feature verified | Its applicable checks and current review. |
 | Integrate this feature | Its evidence, preserved comparison data and actual conflicts with the target. |
 | Merge or publish | Required CI, repository protections and explicit authority. Opening a PR does not grant these permissions. |
 
-After local and visual checks pass and the changes are committed, open the PR. You can also open a draft earlier. No final regression run is required just to create it. Full regression normally belongs to PR CI; a local full-suite run requires approval of that run.
+After implementation, review and feature verification pass and the changes are
+committed, open the PR from verified Integrate. Do not open a draft earlier as
+a substitute for missing feature proof. Full regression can still belong to PR
+CI; a local full-suite run requires approval of that run.
 
 ## Small adjustments
 
-Ask for the affected tests. Commands configured with `testFiles: "changed"` follow relative JS/TS imports and filename mappings, including changed tests themselves. The plan names the test files and why they were selected; receipts preserve the executed selection. Later runs can narrow from a passing run of the same command. Unrelated scoped evidence remains valid; delta review checks the follow-up diff. No elapsed-time estimate is invented when there is no timing history.
+Ask for the affected tests. Commands configured with `testFiles: "changed"` follow relative JS/TS imports and filename mappings, including changed tests themselves. Files under `.empirical/` never select tests. When the feature's `plan.md` lists test files under an `## Affected tests` heading, those files plus any changed tests are the selection instead, with no import fan-out; a change to a widely imported module otherwise selects too many files and is refused with `TOO_MANY_CHANGED_TESTS`. The QA plan names the test files and why they were selected; receipts preserve the executed selection. Later runs can narrow from a passing run of the same command. Unrelated scoped evidence remains valid; delta review checks the follow-up diff. No elapsed-time estimate is invented when there is no timing history.
 
 This selector is not a complete language build system: aliases, generated dependencies and dynamic imports may need explicit test files or a broader configured command. An empty selection never silently runs the entire suite. Full regression remains the final check.
 
 ## Checkpoints and common warnings
 
-A checkpoint is a deliberate pause when Empirical truly needs a user decision, such as a time budget being exceeded with no standing authorization to continue. Review findings identify the exact failed criteria and blocking finding IDs. Non-blocking findings are deferred automatically and never start another fix lap. One repair round is the budget: when a second review still requests changes, the agent stops and you choose, converging first (open or merge the pull request and track what remains as follow-up tickets), one more fix lap with its cost, or stop. When a real checkpoint is required, choose an exit: continue with a new budget, ship a draft PR, split the work, defer nonblocking findings, or stop. Budgets measure active time: the gaps between journal events count as work up to 30 minutes each, so an overnight pause costs at most 30 minutes. Continuing adds the new minutes on top of the time already used. Budgets are configurable.
+A checkpoint is a deliberate pause when Empirical truly needs a user decision, such as a time budget being exceeded with no standing authorization to continue. Review findings identify the exact failed criteria and blocking finding IDs. Non-blocking findings are deferred automatically and never start another fix lap. One repair round is the budget: when a second review still requests changes, the agent stops and you choose one more fix lap with its cost, or stop. When a real checkpoint is required, choose an exit: continue with a new budget, split the work, defer nonblocking findings, or stop. Opening a pull request cannot substitute for incomplete verification. Budgets measure active time: the gaps between journal events count as work up to 30 minutes each, so an overnight pause costs at most 30 minutes. Continuing adds the new minutes on top of the time already used. Budgets are configurable.
 
 | Message | Meaning and next action |
 | --- | --- |

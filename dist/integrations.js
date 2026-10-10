@@ -14675,6 +14675,7 @@ __export(exports_protocol, {
   verifyTrackerWaiver: () => verifyTrackerWaiver,
   verifyReceiptDigest: () => verifyReceiptDigest,
   verifyImpactManifest: () => verifyImpactManifest,
+  verifyFeatureClosureFile: () => verifyFeatureClosureFile,
   verifyFeatureClosure: () => verifyFeatureClosure,
   verifyFastImpactManifest: () => verifyFastImpactManifest,
   verifyAuthorization: () => verifyAuthorization,
@@ -14699,6 +14700,7 @@ __export(exports_protocol, {
   impactManifestSchema: () => impactManifestSchema,
   featureLifecycleSchema: () => featureLifecycleSchema,
   featureClosureSchema: () => featureClosureSchema,
+  featureClosureFileSchema: () => featureClosureFileSchema,
   fastImpactManifestSchema: () => fastImpactManifestSchema,
   externalMergeFactsSchema: () => externalMergeFactsSchema,
   executionModeSchema: () => executionModeSchema,
@@ -14714,12 +14716,14 @@ __export(exports_protocol, {
   criterionSchema: () => criterionSchema,
   createTrackerWaiver: () => createTrackerWaiver,
   createImpactManifest: () => createImpactManifest,
+  createFeatureClosureFile: () => createFeatureClosureFile,
   createFeatureClosure: () => createFeatureClosure,
   createFastImpactManifest: () => createFastImpactManifest,
   createAuthorization: () => createAuthorization,
   completionLevelSchema: () => completionLevelSchema,
   commandPolicySchema: () => commandPolicySchema,
   collectedReceiptSchema: () => collectedReceiptSchema,
+  closureRecordsSchema: () => closureRecordsSchema,
   closureOutcomeSchema: () => closureOutcomeSchema,
   canonicalJson: () => canonicalJson,
   authorizationSchema: () => authorizationSchema,
@@ -14871,6 +14875,24 @@ function verifyFeatureClosure(closure) {
     throw new Error("Feature closure digest does not match its contents.");
   }
 }
+function createFeatureClosureFile(input) {
+  const body = { schemaVersion: 2, ...input };
+  const file2 = featureClosureFileSchema.parse({ ...body, digest: digestJson(body) });
+  verifyFeatureClosureFile(file2);
+  return file2;
+}
+function verifyFeatureClosureFile(file2) {
+  const parsed = featureClosureFileSchema.parse(file2);
+  const { digest, ...body } = parsed;
+  if (digestJson(body) !== digest) {
+    throw new Error("Feature closure file digest does not match its contents.");
+  }
+  if (parsed.closure)
+    verifyFeatureClosure(parsed.closure);
+  if (new Set(parsed.records.receipts.map((receipt) => receipt.id)).size !== parsed.records.receipts.length) {
+    throw new Error("Feature closure file repeats a folded receipt.");
+  }
+}
 function createTrackerWaiver(input) {
   assertBoundedJustification(input.justification, "Tracker waiver justification");
   const body = { schemaVersion: 1, ...input };
@@ -14928,7 +14950,7 @@ function verifyReceiptDigest(receipt) {
     throw new Error(`Evidence receipt ${parsed.id} has an asserted result inconsistent with its provenance.`);
   }
 }
-var MAX_COMMAND_TIMEOUT_MS = 2700000, SCHEMA_VERSION = 5, POLICY_SCHEMA_VERSION = 2, MANIFEST_SCHEMA_VERSION = 2, RECEIPT_SCHEMA_VERSION = 1, PRODUCT_VERSION = "0.42.0", workflowSchema, featureLifecycleSchema, directPauseSchema, sizeDecisionSchema, defaultModeSchema, directActionSchema, executionModeSchema, verificationProfileSchema, promotionFullCiSchema, promotionBindingSchema, riskFloorSchema, completionLevelSchema, phaseSchema, workflowStatusSchema, criterionSchema, evidenceKindSchema, qaCheckKindSchema, qaAttemptOutcomeSchema, MAX_SCOPE_ENTRIES = 32, MAX_SCOPE_ENTRY_LENGTH = 200, commandPolicySchema, evidencePolicySchema, projectPolicySchema, impactManifestSchema, fastImpactManifestSchema, authorizationSchema, reviewCoverageSchema, closureOutcomeSchema, externalMergeFactsSchema, featureClosureSchema, trackerWaiverReasonSchema, trackerWaiverSchema, COMPLETION_ORDER, receiptProvenanceSchema, receiptBaseSchema, executedReceiptSchema, artifactRecordSchema, qaCommandRecordSchema, qaResultRecordSchema, qaAttemptSchema, qaReceiptSchema, collectedReceiptSchema, gitSha40Schema, githubDecimalIdSchema, githubCheckNameSchema, remoteChecksReceiptSchema, evidenceReceiptSchema;
+var MAX_COMMAND_TIMEOUT_MS = 2700000, SCHEMA_VERSION = 5, POLICY_SCHEMA_VERSION = 2, MANIFEST_SCHEMA_VERSION = 2, RECEIPT_SCHEMA_VERSION = 1, PRODUCT_VERSION = "0.43.0", workflowSchema, featureLifecycleSchema, directPauseSchema, sizeDecisionSchema, defaultModeSchema, directActionSchema, executionModeSchema, verificationProfileSchema, promotionFullCiSchema, promotionBindingSchema, riskFloorSchema, completionLevelSchema, phaseSchema, workflowStatusSchema, criterionSchema, evidenceKindSchema, qaCheckKindSchema, qaAttemptOutcomeSchema, MAX_SCOPE_ENTRIES = 32, MAX_SCOPE_ENTRY_LENGTH = 200, commandPolicySchema, evidencePolicySchema, projectPolicySchema, impactManifestSchema, fastImpactManifestSchema, authorizationSchema, reviewCoverageSchema, closureOutcomeSchema, externalMergeFactsSchema, featureClosureSchema, sha256DigestSchema, foldedPathSchema, closureRecordsSchema, featureClosureFileSchema, trackerWaiverReasonSchema, trackerWaiverSchema, COMPLETION_ORDER, receiptProvenanceSchema, receiptBaseSchema, executedReceiptSchema, artifactRecordSchema, qaCommandRecordSchema, qaResultRecordSchema, qaAttemptSchema, qaReceiptSchema, collectedReceiptSchema, gitSha40Schema, githubDecimalIdSchema, githubCheckNameSchema, remoteChecksReceiptSchema, evidenceReceiptSchema;
 var init_protocol = __esm(() => {
   init_zod();
   init_justification();
@@ -15152,6 +15174,47 @@ var init_protocol = __esm(() => {
     externalMerge: externalMergeFactsSchema.optional(),
     closedAt: exports_external.string().datetime({ offset: true }),
     digest: exports_external.string().regex(/^sha256:[a-f0-9]{64}$/)
+  }).strict();
+  sha256DigestSchema = exports_external.string().regex(/^sha256:[a-f0-9]{64}$/);
+  foldedPathSchema = exports_external.string().min(1).max(512).regex(/^(?!\/)(?![a-zA-Z]:)(?!(?:.*\/)?\.\.(?:\/|$))[^\\\u0000-\u001f]+$/);
+  closureRecordsSchema = exports_external.object({
+    foldedAt: exports_external.string().datetime({ offset: true }),
+    recordsCommit: exports_external.string().regex(/^[a-f0-9]{40}$/).nullable(),
+    recordsDigest: sha256DigestSchema,
+    foldedPaths: exports_external.array(foldedPathSchema).max(5000),
+    receipts: exports_external.array(exports_external.object({
+      id: exports_external.string().regex(/^(?:executed|collected|qa|remote-checks)-[a-z0-9-]{1,120}$/),
+      kind: exports_external.enum(["collected", "executed", "qa", "remote-checks"]),
+      checkId: exports_external.string().min(1).max(128).nullable(),
+      criteria: exports_external.array(exports_external.string().regex(/^AC-[A-Z0-9]+(?:-[A-Z0-9]+)*$/).max(64)).max(200),
+      passed: exports_external.boolean(),
+      digest: sha256DigestSchema,
+      artifacts: exports_external.array(exports_external.object({
+        path: foldedPathSchema,
+        mediaType: exports_external.string().min(1).max(128),
+        bytes: exports_external.number().int().nonnegative(),
+        digest: sha256DigestSchema
+      }).strict()).max(400)
+    }).strict()).max(500),
+    review: exports_external.object({
+      verdict: exports_external.string().min(1).max(64),
+      findings: exports_external.number().int().nonnegative(),
+      blocking: exports_external.number().int().nonnegative(),
+      deferredFindingIds: exports_external.array(exports_external.string().min(1).max(128)).max(500)
+    }).strict().nullable(),
+    consults: exports_external.array(exports_external.object({
+      specialist: exports_external.string().min(1).max(128),
+      verdict: exports_external.string().min(1).max(64)
+    }).strict()).max(100),
+    integration: exports_external.object({ digest: sha256DigestSchema }).strict().nullable(),
+    delivery: exports_external.object({ digest: sha256DigestSchema }).strict().nullable()
+  }).strict();
+  featureClosureFileSchema = exports_external.object({
+    schemaVersion: exports_external.literal(2),
+    feature: exports_external.string().regex(/^[a-z0-9][a-z0-9-]*$/).max(80),
+    closure: featureClosureSchema.nullable(),
+    records: closureRecordsSchema,
+    digest: sha256DigestSchema
   }).strict();
   trackerWaiverReasonSchema = exports_external.enum(["tracked-elsewhere", "abandoned"]);
   trackerWaiverSchema = exports_external.object({
@@ -15602,7 +15665,7 @@ function roadmapFor(input) {
     waitingOn,
     ...waitingOn.length ? { help: "https://github.com/goempirical/empirical-sdd/blob/develop/docs/harness-guide.md#checkpoints-and-common-warnings" } : {},
     ...input.selection?.length ? { verificationSelection: input.selection.map(compactSelectionEntry) } : {},
-    nextAction: checkpoint && input.tracker.gate?.state !== "blocked" ? `Stop at the checkpoint and ask the user: ship as is (open or update a draft PR), split, defer non-blocking findings, continue with a new budget (empirical_checkpoint at revision ${state.revision}), or stop` : nextAction,
+    nextAction: checkpoint && input.tracker.gate?.state !== "blocked" ? `Stop at the checkpoint and ask the user: split, defer non-blocking findings, continue with a new budget (empirical_checkpoint at revision ${state.revision}), or stop; a pull request waits for verified Integrate` : nextAction,
     verificationLeft,
     ...time3 ? { time: time3 } : {},
     jobs
@@ -15929,7 +15992,7 @@ function oneLine(text) {
   const line = text.replace(/\s+/g, " ").trim();
   return line.length > WAITING_TEXT_LIMIT ? `${line.slice(0, WAITING_TEXT_LIMIT - 1)}…` : line;
 }
-var PHASE_ORDER, POST_DONE_PHASES, COMPLEX_REVIEW_FIRST_ORDER, MERGE_WAIT_TEXT = "Merge of this feature's pull request; the merge closes the feature as integrated", MERGE_NEXT_ACTION = "Commit and push the branch, then merge its pull request after its checks pass; Empirical closes the feature as integrated when it sees the merge", WAITING_TEXT_LIMIT = 160, ESTIMATE_SAMPLE = 3, DEFAULT_BUDGET_MINUTES, IDLE_GAP_CAP_MS, CHECKPOINT_SUMMARY = "Checkpoint:", PR_CI_NOTE = "proven by PR CI at Deliver";
+var PHASE_ORDER, POST_DONE_PHASES, COMPLEX_REVIEW_FIRST_ORDER, MERGE_WAIT_TEXT = "Open and merge this verified feature's pull request; the merge closes the feature as integrated", MERGE_NEXT_ACTION = "Commit and push the verified branch, open its pull request, then merge it after its checks pass; Empirical closes the feature as integrated when it sees the merge", WAITING_TEXT_LIMIT = 160, ESTIMATE_SAMPLE = 3, DEFAULT_BUDGET_MINUTES, IDLE_GAP_CAP_MS, CHECKPOINT_SUMMARY = "Checkpoint:", PR_CI_NOTE = "proven by PR CI at Deliver";
 var init_roadmap = __esm(() => {
   init_protocol();
   init_qa();
@@ -18025,6 +18088,52 @@ ${body}`] : [];
 ${title}` };
 }
 
+// src/closure-records.ts
+import { lstat as lstat2, readFile as readFile3 } from "node:fs/promises";
+import { join as join5 } from "node:path";
+async function readClosureRecords(root, feature) {
+  const store = typeof root === "string" ? new ProjectStore(root) : root;
+  const path = join5(store.specDirectory(feature), "closure.json");
+  const stat3 = await lstat2(path).catch((error51) => {
+    if (error51.code === "ENOENT")
+      return null;
+    throw error51;
+  });
+  if (!stat3)
+    return null;
+  let value;
+  try {
+    await store.assertFeaturePathSafe(feature, [path]);
+    if (!stat3.isFile() || stat3.size > CLOSURE_FILE_MAX_BYTES)
+      throw new Error("closure.json must be a bounded regular file");
+    value = JSON.parse(await readFile3(path, "utf8"));
+  } catch (error51) {
+    throw invalid(feature, error51);
+  }
+  if (typeof value === "object" && value !== null && value.schemaVersion === 1)
+    return null;
+  try {
+    const file2 = featureClosureFileSchema.parse(value);
+    verifyFeatureClosureFile(file2);
+    if (file2.feature !== feature)
+      throw new Error(`closure.json belongs to feature ${file2.feature}`);
+    return file2.records;
+  } catch (error51) {
+    throw invalid(feature, error51);
+  }
+}
+function invalid(feature, error51) {
+  const detail = error51 instanceof exports_external.ZodError ? error51.issues.slice(0, 3).map((issue2) => `${issue2.path.join(".") || "(root)"}: ${issue2.message}`).join("; ") : error51 instanceof Error ? error51.message : String(error51);
+  return new EmpiricalError("CLOSURE_RECORDS_INVALID", `closure.json for ${feature} cannot be validated: ${detail}`, error51);
+}
+var CLOSURE_FILE_MAX_BYTES = 4194304;
+var init_closure_records = __esm(() => {
+  init_zod();
+  init_errors3();
+  init_protocol();
+  init_storage();
+});
+
 // src/local-file-patterns.ts
 function invalidConfig(message) {
   throw new EmpiricalError("INVALID_CONFIG", `isolation.localFiles ${message}`);
@@ -18172,8 +18281,8 @@ var init_local_file_patterns = __esm(() => {
 import { spawnSync as spawnSync2 } from "node:child_process";
 import { createHash as createHash3 } from "node:crypto";
 import { constants as constants3 } from "node:fs";
-import { lstat as lstat2, mkdir, open, readdir as readdir3, realpath as realpath2, unlink } from "node:fs/promises";
-import { join as join5, resolve as resolve3 } from "node:path";
+import { lstat as lstat3, mkdir, open, readdir as readdir3, realpath as realpath2, unlink } from "node:fs/promises";
+import { join as join6, resolve as resolve3 } from "node:path";
 function isSafeLocalFilePath(path) {
   return typeof path === "string" && Boolean(path) && path.length <= 1024 && !/[\\:*?"<>|\[\]{}\x00-\x1f\x7f]/.test(path) && !path.includes(String.fromCharCode(65533)) && !path.split("/").some((part) => !part || part === "." || part === ".." || /[. ]$/.test(part) || part.trim() !== part || /^\.git/i.test(part) || /^\.empirical/i.test(part) || /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(part));
 }
@@ -18192,7 +18301,7 @@ function distinctSafePaths(value, max) {
   return paths;
 }
 function validateCopyFiles(value) {
-  return distinctSafePaths(value, 100) ?? invalid();
+  return distinctSafePaths(value, 100) ?? invalid2();
 }
 function validateLocalFileList(value, max = 300) {
   const paths = distinctSafePaths(value, max);
@@ -18212,14 +18321,14 @@ function mergeLocalFileSelection(explicit, candidates) {
   }
   return { discovered, duplicates };
 }
-function invalid() {
+function invalid2() {
   throw new EmpiricalError("INVALID_CONFIG", "copyFiles must contain at most 100 distinct safe relative file paths; metadata, traversal, symlinks and patterns are not supported");
 }
 function failure(path, reason) {
   throw new EmpiricalError("WORKTREE_LOCAL_FILE_UNSAFE", `Local worktree file ${path}: ${reason}`);
 }
 async function details(path) {
-  return lstat2(path).catch((error51) => {
+  return lstat3(path).catch((error51) => {
     if (error51.code === "ENOENT")
       return null;
     throw error51;
@@ -18230,7 +18339,7 @@ async function checkPath(root, path, createParents = false) {
   const parts = path.split("/");
   let current = canonicalRoot;
   for (const [index, part] of parts.entries()) {
-    current = join5(current, part);
+    current = join6(current, part);
     let info = await details(current);
     if (!info && index < parts.length - 1 && createParents) {
       await mkdir(current, { mode: 448 }).catch((error51) => {
@@ -18258,8 +18367,8 @@ async function inspectPath(canonicalRoot, path) {
   const parts = path.split("/");
   let current = canonicalRoot;
   for (const [index, part] of parts.entries()) {
-    current = join5(current, part);
-    const info = await lstat2(current).catch((error51) => {
+    current = join6(current, part);
+    const info = await lstat3(current).catch((error51) => {
       if (error51.code === "ENOENT" || error51.code === "ENOTDIR")
         return null;
       throw error51;
@@ -18299,7 +18408,7 @@ async function findDestination(canonicalRoot, path, exactParents = false) {
     if (index < parts.length - 1 && name !== part)
       return exactParents ? { state: "missing" } : { state: "case-conflict" };
     actual.push(name);
-    current = join5(current, name);
+    current = join6(current, name);
   }
   return { state: "existing", path: actual.join("/") };
 }
@@ -18416,7 +18525,7 @@ async function commonDirectory(root) {
 async function metadataDirectory(common, segments, create) {
   let path = common;
   for (const segment of segments) {
-    path = join5(path, segment);
+    path = join6(path, segment);
     if (create) {
       await mkdir(path, { mode: 448 }).catch((error51) => {
         if (error51.code !== "EEXIST")
@@ -18434,7 +18543,7 @@ async function metadataDirectory(common, segments, create) {
 async function markerFile(directory, name) {
   if (!directory)
     return null;
-  const path = join5(directory, name);
+  const path = join6(directory, name);
   const info = await details(path);
   if (info && (!info.isFile() || info.isSymbolicLink()))
     failure("copyFiles", "unsafe copy marker");
@@ -18473,12 +18582,12 @@ async function localFileMarkers(targetRoot, legacyMarker) {
 }
 function splitProposalLocalFiles(proposal) {
   if (proposal.localFiles && proposal.localFiles.mode !== "copy-missing")
-    invalid();
+    invalid2();
   const paths = validateLocalFileList(proposal.localFiles?.paths ?? []);
   const discovered = proposal.localFiles?.discovered ?? [];
   const explicit = paths.slice(0, paths.length - discovered.length);
   if (explicit.length > 100 || discovered.some((path, index) => paths[explicit.length + index] !== path))
-    invalid();
+    invalid2();
   return { explicit, discovered };
 }
 async function validateWorktreeSources(proposal) {
@@ -18581,8 +18690,8 @@ async function copyOne(plan, sourceRoot, targetRoot, path, optional2, markers) {
   if (!optional2)
     checkIgnored(targetRoot, path);
   const marker = await markers.marker(path, true);
-  const source = join5(sourceRoot, path);
-  const target = join5(targetRoot, path);
+  const source = join6(sourceRoot, path);
+  const target = join6(targetRoot, path);
   const markerHandle = await open(marker, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_NOFOLLOW, 384);
   await markerHandle.sync();
   await markerHandle.close();
@@ -18723,7 +18832,7 @@ var init_types = __esm(() => {
 // src/worktrees.ts
 import { spawnSync as spawnSync3 } from "node:child_process";
 import { createHash as createHash4 } from "node:crypto";
-import { lstat as lstat3, mkdir as mkdir2, readFile as readFile3, realpath as realpath3 } from "node:fs/promises";
+import { lstat as lstat4, mkdir as mkdir2, readFile as readFile4, realpath as realpath3 } from "node:fs/promises";
 import { basename, dirname, isAbsolute as isAbsolute4, relative as relative4, resolve as resolve4, sep as sep2 } from "node:path";
 function inferChangeType(request) {
   if (/\b(fix|bug|broken|regression|repair|crash|error|incorrect)\b/i.test(request))
@@ -18917,7 +19026,7 @@ function parseWorktreeList(output) {
 }
 async function pathExists(path) {
   try {
-    await lstat3(path);
+    await lstat4(path);
     return true;
   } catch (error51) {
     if (error51.code === "ENOENT")
@@ -18932,7 +19041,7 @@ async function handoffIntentPath(root, token) {
   let directory = common;
   for (const segment of ["empirical-sdd", "handoffs"]) {
     directory = resolve4(directory, segment);
-    const details3 = await lstat3(directory).catch((error51) => {
+    const details3 = await lstat4(directory).catch((error51) => {
       if (error51.code === "ENOENT")
         return null;
       throw error51;
@@ -18942,7 +19051,7 @@ async function handoffIntentPath(root, token) {
     }
   }
   const path = resolve4(directory, `${token}.json`);
-  const details2 = await lstat3(path).catch((error51) => {
+  const details2 = await lstat4(path).catch((error51) => {
     if (error51.code === "ENOENT")
       return null;
     throw error51;
@@ -18971,7 +19080,7 @@ async function readWorktreeIntent(root, token) {
   const path = await handoffIntentPath(root, token);
   let proposal;
   try {
-    proposal = JSON.parse(await readFile3(path, "utf8"));
+    proposal = JSON.parse(await readFile4(path, "utf8"));
   } catch (error51) {
     if (error51.code === "ENOENT")
       return null;
@@ -19041,7 +19150,7 @@ var init_worktrees = __esm(() => {
 
 // src/tracker-auth.ts
 import { constants as constants4 } from "node:fs";
-import { lstat as lstat4, open as open2, realpath as realpath4 } from "node:fs/promises";
+import { lstat as lstat5, open as open2, realpath as realpath4 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute as isAbsolute5, posix as posix2, relative as relative5, resolve as resolve5, sep as sep3, win32 } from "node:path";
 function defaultTrackerCredentialEnv(provider) {
@@ -19218,7 +19327,7 @@ async function readSecretFile(names, dependencies) {
   assertOutsideRepository(resolve5(path), repositoryRoot);
   let stats;
   try {
-    stats = await lstat4(path);
+    stats = await lstat5(path);
   } catch (error51) {
     if (isMissingFile(error51))
       return null;
@@ -19892,7 +20001,7 @@ __export(exports_linear_mcp_tracking, {
   acceptLinearMcpTracker: () => acceptLinearMcpTracker
 });
 import { mkdir as mkdir3, rm } from "node:fs/promises";
-import { join as join7 } from "node:path";
+import { join as join8 } from "node:path";
 function legacyResultDescriptor(kind) {
   return exports_external.toJSONSchema(legacyResults[kind]);
 }
@@ -20406,13 +20515,13 @@ function assertFeature2(state) {
     throw new EmpiricalError("TRACKER_FEATURE_REQUIRED", "Linear MCP tracking requires an active feature");
 }
 function bridgeDirectory(root, feature2) {
-  return join7(root, ".empirical", "specs", feature2, "tracker");
+  return join8(root, ".empirical", "specs", feature2, "tracker");
 }
 function bridgePath(root, feature2) {
-  return join7(bridgeDirectory(root, feature2), "linear-mcp-bridge.json");
+  return join8(bridgeDirectory(root, feature2), "linear-mcp-bridge.json");
 }
 function bridgeLockPath(root, feature2) {
-  return join7(bridgeDirectory(root, feature2), "linear-mcp.lock");
+  return join8(bridgeDirectory(root, feature2), "linear-mcp.lock");
 }
 async function assertBridgePathSafe(root, feature2) {
   const store = new ProjectStore(root, feature2);
@@ -20619,8 +20728,8 @@ var init_linear_mcp_tracking = __esm(() => {
 import { Buffer as Buffer2 } from "node:buffer";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { lstat as lstat5, readFile as readFile4, realpath as realpath5, rm as rm2 } from "node:fs/promises";
-import { join as join8, relative as relative6, resolve as resolve6 } from "node:path";
+import { lstat as lstat6, readFile as readFile5, realpath as realpath5, rm as rm2 } from "node:fs/promises";
+import { join as join9, relative as relative6, resolve as resolve6 } from "node:path";
 import { isIP } from "node:net";
 function parseTrackerDiscoveryInput(value) {
   let parsed;
@@ -20989,13 +21098,38 @@ async function loadTrackerArtifacts(root, state, policy) {
   const repositoryLink = await repositoryLinkContext(root);
   const artifacts = [];
   let totalBytes = 0;
+  const folded = await readClosureRecords(root, state.activeFeature);
+  const foldedLink = folded?.recordsCommit && repositoryLink ? { ...repositoryLink, commit: folded.recordsCommit } : null;
   for (const receiptId of [...new Set(state.evidenceReceiptIds)].sort()) {
     if (artifacts.length >= TRACKER_ARTIFACT_MAX_COUNT)
       break;
-    const path = join8(root, ".empirical", "specs", state.activeFeature, "evidence", "receipts", `${receiptId}.json`);
+    const indexed = folded?.receipts.find((receipt2) => receipt2.id === receiptId);
+    if (indexed) {
+      for (const artifact of indexed.artifacts) {
+        if (artifacts.length >= TRACKER_ARTIFACT_MAX_COUNT)
+          break;
+        if (!TRACKER_ARTIFACT_MEDIA.has(artifact.mediaType) || isSecretLikeArtifactPath(artifact.path)) {
+          throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", `Folded evidence artifact ${artifact.path} cannot be projected`);
+        }
+        totalBytes += artifact.bytes;
+        if (artifact.bytes > TRACKER_ARTIFACT_MAX_BYTES || totalBytes > TRACKER_ARTIFACT_TOTAL_BYTES) {
+          throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "Tracker evidence artifacts exceed the size bounds");
+        }
+        artifacts.push({
+          receiptId,
+          path: artifact.path,
+          mediaType: artifact.mediaType,
+          digest: artifact.digest,
+          size: artifact.bytes,
+          url: await artifactDurableUrl(root, foldedLink, artifact.path, artifact.digest)
+        });
+      }
+      continue;
+    }
+    const path = join9(root, ".empirical", "specs", state.activeFeature, "evidence", "receipts", `${receiptId}.json`);
     let receipt;
     try {
-      receipt = evidenceReceiptSchema.parse(JSON.parse(await readFile4(path, "utf8")));
+      receipt = evidenceReceiptSchema.parse(JSON.parse(await readFile5(path, "utf8")));
       verifyReceiptDigest(receipt);
     } catch (error51) {
       throw new EmpiricalError("TRACKER_ARTIFACT_RECEIPT_INVALID", `Committed evidence receipt ${receiptId} cannot be validated for tracker projection`, error51);
@@ -21018,7 +21152,7 @@ async function loadTrackerArtifacts(root, state, policy) {
       if (contained === ".." || contained.startsWith("../") || contained.startsWith("..\\")) {
         throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "An evidence artifact escapes the repository");
       }
-      const metadata = await lstat5(absolute).catch(() => null);
+      const metadata = await lstat6(absolute).catch(() => null);
       if (!metadata || metadata.isSymbolicLink() || !metadata.isFile()) {
         throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "An evidence artifact is missing or is not a regular file");
       }
@@ -21034,7 +21168,7 @@ async function loadTrackerArtifacts(root, state, policy) {
       if (totalBytes > TRACKER_ARTIFACT_TOTAL_BYTES) {
         throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "Tracker evidence artifacts exceed the total size bound");
       }
-      const bytes = await readFile4(resolvedArtifact);
+      const bytes = await readFile5(resolvedArtifact);
       if (sha256(bytes) !== artifact.digest) {
         throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "An evidence artifact changed after its receipt was committed");
       }
@@ -21916,11 +22050,13 @@ async function projectRemoteTicketV2(root, policy, binding, pending, credentials
       });
       activePending = await acknowledgeTrackerEffect(root, activePending, { key: commentKey, kind: "comment", remoteId: commentId, at: now(dependencies) });
     }
+    let folded;
     for (const artifact of pending.projection.artifacts ?? []) {
       const artifactKey = trackerEffectKey(policy, pending.projection, "artifact", artifact.digest);
       if (hasTrackerEffect(activePending, artifactKey))
         continue;
-      const remoteId = await publishRemoteArtifact(root, policy, binding, artifact, artifactKey, credentials, dependencies);
+      folded ??= new Set((await readClosureRecords(root, pending.projection.feature))?.receipts.map((receipt) => receipt.id));
+      const remoteId = !artifact.url && folded.has(artifact.receiptId) ? null : await publishRemoteArtifact(root, policy, binding, artifact, artifactKey, credentials, dependencies);
       activePending = await acknowledgeTrackerEffect(root, activePending, { key: artifactKey, kind: "artifact", remoteId, at: now(dependencies) });
     }
   }
@@ -22234,7 +22370,7 @@ async function readTrackerArtifactBytes(root, artifact) {
   if (contained === ".." || contained.startsWith("../") || contained.startsWith("..\\")) {
     throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "An evidence artifact escapes the repository before upload");
   }
-  const metadata = await lstat5(absolute).catch(() => null);
+  const metadata = await lstat6(absolute).catch(() => null);
   if (!metadata || metadata.isSymbolicLink() || !metadata.isFile()) {
     throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "An evidence artifact is missing or unsafe before upload");
   }
@@ -22243,7 +22379,7 @@ async function readTrackerArtifactBytes(root, artifact) {
   if (resolvedRelative === ".." || resolvedRelative.startsWith("../") || resolvedRelative.startsWith("..\\")) {
     throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "An evidence artifact resolves outside the repository before upload");
   }
-  const bytes = await readFile4(resolvedArtifact);
+  const bytes = await readFile5(resolvedArtifact);
   if (bytes.byteLength !== artifact.size || sha256(bytes) !== artifact.digest) {
     throw new EmpiricalError("TRACKER_ARTIFACT_UNSAFE", "An evidence artifact changed before provider upload");
   }
@@ -23478,19 +23614,19 @@ async function requireTrackerPolicy(root) {
   return policy;
 }
 function trackerPolicyPath(root) {
-  return join8(resolve6(root), ".empirical", "tracker.json");
+  return join9(resolve6(root), ".empirical", "tracker.json");
 }
 function trackerDirectory(root, feature2) {
-  return join8(resolve6(root), ".empirical", "specs", feature2, "tracker");
+  return join9(resolve6(root), ".empirical", "specs", feature2, "tracker");
 }
 function trackerBindingPath(root, feature2) {
-  return join8(trackerDirectory(root, feature2), "binding.json");
+  return join9(trackerDirectory(root, feature2), "binding.json");
 }
 function trackerPendingPath(root, feature2) {
-  return join8(trackerDirectory(root, feature2), "pending.json");
+  return join9(trackerDirectory(root, feature2), "pending.json");
 }
 async function assertPlainTrackerPath(root, path) {
-  for (const candidate of [join8(resolve6(root), ".empirical"), path]) {
+  for (const candidate of [join9(resolve6(root), ".empirical"), path]) {
     if (await isSymbolicLink(candidate)) {
       throw new EmpiricalError("UNSAFE_TRACKER_PATH", `Tracker storage cannot use symbolic links: ${candidate}`);
     }
@@ -23501,7 +23637,7 @@ async function assertFeatureTrackerPath(root, feature2, path) {
   await store.assertFeaturePathSafe(feature2, [trackerDirectory(root, feature2), path]);
 }
 async function withTrackerLock(root, feature2, operation2) {
-  const path = join8(trackerDirectory(root, feature2), "tracker.lock");
+  const path = join9(trackerDirectory(root, feature2), "tracker.lock");
   await assertFeatureTrackerPath(root, feature2, path);
   return withOwnedFileLock(path, operation2);
 }
@@ -23728,9 +23864,9 @@ async function trackerBindIntent(root, feature2, input, linkOnly = false) {
   if (input.mode === "attach") {
     return trackerAttachIntentSchema.parse({ mode: "attach", ticket: input.ticket.trim(), ...linkOnly ? { linkOnly: true } : {} });
   }
-  const specPath = join8(root, ".empirical", "specs", feature2, "spec.md");
+  const specPath = join9(root, ".empirical", "specs", feature2, "spec.md");
   await new ProjectStore(root, feature2).assertFeaturePathSafe(feature2, [specPath]);
-  const spec = await isFile(specPath) ? await readFile4(specPath, "utf8") : "";
+  const spec = await isFile(specPath) ? await readFile5(specPath, "utf8") : "";
   const content = trackerContentFromSpec(spec, titleFromFeature(feature2));
   const description = safeText(input.description ?? content.description, 60000);
   const marker = `empirical-sdd-bind:${feature2}`;
@@ -24639,6 +24775,7 @@ var TRACKER_SCHEMA_VERSION = 2, TRACKER_LEGACY_SCHEMA_VERSION = 1, DISABLED_TRAC
 }, trackerWaiveInputSchema;
 var init_tracking = __esm(() => {
   init_zod();
+  init_closure_records();
   init_errors3();
   init_checkouts();
   init_worktrees();
@@ -25049,8 +25186,8 @@ var init_tracking = __esm(() => {
 
 // src/delegation.ts
 import { execFile as execFile2 } from "node:child_process";
-import { lstat as lstat6, mkdir as mkdir4, readFile as readFile5, realpath as realpath6 } from "node:fs/promises";
-import { isAbsolute as isAbsolute6, join as join9, relative as relative7, resolve as resolve7, sep as sep4 } from "node:path";
+import { lstat as lstat7, mkdir as mkdir4, readFile as readFile6, realpath as realpath6 } from "node:fs/promises";
+import { isAbsolute as isAbsolute6, join as join10, relative as relative7, resolve as resolve7, sep as sep4 } from "node:path";
 import { promisify } from "node:util";
 function fields(host, operation2) {
   if (operation2 === "spawn" && !host.capabilities.readOnly && !host.tools.spawn.bindings.readOnly) {
@@ -25462,8 +25599,8 @@ async function registeredRoots(root) {
   return roots;
 }
 function ledgerPaths(identity) {
-  const directory = join9(identity.commonDirectory, "empirical-sdd", "delegations");
-  return { directory, file: join9(directory, "assignments.json"), lock: join9(directory, "assignments.lock") };
+  const directory = join10(identity.commonDirectory, "empirical-sdd", "delegations");
+  return { directory, file: join10(directory, "assignments.json"), lock: join10(directory, "assignments.lock") };
 }
 async function rejectSymlinkComponents(root, target) {
   const rel = relative7(root, target);
@@ -25471,8 +25608,8 @@ async function rejectSymlinkComponents(root, target) {
     fail("DELEGATION_PATH_UNSAFE", "Delegation paths must remain inside their registered root");
   let path = root;
   for (const component of rel.split(sep4).filter(Boolean)) {
-    path = join9(path, component);
-    const details2 = await lstat6(path).catch((error51) => {
+    path = join10(path, component);
+    const details2 = await lstat7(path).catch((error51) => {
       if (error51.code === "ENOENT")
         return null;
       throw error51;
@@ -25486,7 +25623,7 @@ async function rejectSymlinkComponents(root, target) {
 async function loadLedger(identity) {
   const paths = ledgerPaths(identity);
   await rejectSymlinkComponents(identity.commonDirectory, paths.file);
-  const details2 = await lstat6(paths.file).catch((error51) => {
+  const details2 = await lstat7(paths.file).catch((error51) => {
     if (error51.code === "ENOENT")
       return null;
     throw error51;
@@ -25497,7 +25634,7 @@ async function loadLedger(identity) {
     fail("DELEGATION_LEDGER_INVALID", "The delegation ledger must be a bounded regular file; restore it before assigning workers");
   let records;
   try {
-    records = ledgerSchema.parse(JSON.parse(await readFile5(paths.file, "utf8"))).records;
+    records = ledgerSchema.parse(JSON.parse(await readFile6(paths.file, "utf8"))).records;
   } catch {
     fail("DELEGATION_LEDGER_INVALID", "The delegation ledger is malformed; existing worker reservations must not be discarded");
   }
@@ -25694,14 +25831,14 @@ var init_delegation = __esm(() => {
 // src/checkouts.ts
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID as randomUUID2 } from "node:crypto";
-import { lstat as lstat7, mkdir as mkdir5, readFile as readFile6, realpath as realpath7, rename, rm as rm3, writeFile } from "node:fs/promises";
+import { lstat as lstat8, mkdir as mkdir5, readFile as readFile7, realpath as realpath7, rename, rm as rm3, writeFile } from "node:fs/promises";
 import { spawnSync as spawnSync4 } from "node:child_process";
-import { dirname as dirname2, isAbsolute as isAbsolute7, join as join10, relative as relative8, resolve as resolve8 } from "node:path";
+import { dirname as dirname2, isAbsolute as isAbsolute7, join as join11, relative as relative8, resolve as resolve8 } from "node:path";
 async function withCheckoutLock(root, operation2) {
   const metadata = gitMetadata(root);
   if (!metadata)
     return operation2();
-  const lock = join10(metadata.gitDirectory, "empirical-sdd", "operation.lock");
+  const lock = join11(metadata.gitDirectory, "empirical-sdd", "operation.lock");
   await assertGitMetadataPathSafe(metadata, lock);
   return withReentrantLock(lock, operation2);
 }
@@ -25716,15 +25853,15 @@ async function withFeatureLock(root, feature2, operation2, options = {}) {
   const metadata = gitMetadata(root);
   if (!metadata)
     return operation2();
-  const lock = join10(metadata.commonDirectory, "empirical-sdd", "features", `${feature2}.lock`);
+  const lock = join11(metadata.commonDirectory, "empirical-sdd", "features", `${feature2}.lock`);
   await assertGitMetadataPathSafe({ ...metadata, gitDirectory: metadata.commonDirectory }, lock);
   if (heldLocks.getStore()?.has(lock))
     return operation2();
   return withReentrantLock(lock, async () => {
-    const intentPath = join10(metadata.commonDirectory, "empirical-sdd", "transfers", `${feature2}.json`);
+    const intentPath = join11(metadata.commonDirectory, "empirical-sdd", "transfers", `${feature2}.json`);
     await assertGitMetadataPathSafe({ ...metadata, gitDirectory: metadata.commonDirectory }, intentPath);
     if (!options.allowPendingTransfer) {
-      const intent = await readFile6(intentPath, "utf8").catch((error51) => {
+      const intent = await readFile7(intentPath, "utf8").catch((error51) => {
         if (error51.code === "ENOENT")
           return null;
         throw error51;
@@ -25752,7 +25889,7 @@ async function withSelectionLock(root, operation2) {
   const metadata = gitMetadata(root);
   if (!metadata)
     return operation2();
-  const lock = join10(metadata.commonDirectory, "empirical-sdd", "selection.lock");
+  const lock = join11(metadata.commonDirectory, "empirical-sdd", "selection.lock");
   await assertGitMetadataPathSafe({ ...metadata, gitDirectory: metadata.commonDirectory }, lock);
   return withReentrantLock(lock, operation2);
 }
@@ -25765,7 +25902,7 @@ async function readCheckoutSelection(rootInput) {
   const feature2 = await readSelectionFile(metadata.selectionPath);
   const claimedElsewhere = new Set;
   for (const worktree of worktreePaths(root)) {
-    if (!(await lstat7(worktree).catch(() => null))?.isDirectory())
+    if (!(await lstat8(worktree).catch(() => null))?.isDirectory())
       continue;
     const other = gitMetadata(worktree);
     if (!other)
@@ -25807,7 +25944,7 @@ async function writeCheckoutSelection(rootInput, feature2, expectedFeature) {
         throw new EmpiricalError("FEATURE_CLAIMED_BY_MULTIPLE_CHECKOUTS", `Feature ${feature2} is already selected by another live checkout`, { feature: feature2 });
       }
       await withCheckoutRecoveryLock(metadata, async () => {
-        const lastPath = join10(dirname2(metadata.selectionPath), "last-feature");
+        const lastPath = join11(dirname2(metadata.selectionPath), "last-feature");
         await assertGitMetadataPathSafe(metadata, lastPath);
         const recovery = await readRecoveryFeatures(metadata);
         if (feature2 === null) {
@@ -25876,7 +26013,7 @@ async function moveCheckoutSelection(sourceRoot, targetRoot, feature2) {
   });
 }
 function featureOwnerPath(metadata, feature2) {
-  return join10(metadata.commonDirectory, "empirical-sdd", "feature-owners", `${feature2}.json`);
+  return join11(metadata.commonDirectory, "empirical-sdd", "feature-owners", `${feature2}.json`);
 }
 async function recordFeatureSelectionOwner(metadata, feature2) {
   const path = featureOwnerPath(metadata, feature2);
@@ -25899,7 +26036,7 @@ async function assertCheckoutFeatureOwner(root, feature2) {
 async function readFeatureSelectionOwner(metadata, feature2) {
   const path = featureOwnerPath(metadata, feature2);
   await assertGitMetadataPathSafe({ ...metadata, gitDirectory: metadata.commonDirectory }, path);
-  const details2 = await lstat7(path).catch((error51) => {
+  const details2 = await lstat8(path).catch((error51) => {
     if (error51.code === "ENOENT")
       return null;
     throw error51;
@@ -25910,7 +26047,7 @@ async function readFeatureSelectionOwner(metadata, feature2) {
     throw new EmpiricalError("INVALID_CHECKOUT_OWNER", "Feature selection ownership must be a bounded regular file");
   let owner;
   try {
-    owner = JSON.parse(await readFile6(path, "utf8"));
+    owner = JSON.parse(await readFile7(path, "utf8"));
     if (owner?.schemaVersion !== 1 || owner.feature !== feature2 || typeof owner.gitDirectory !== "string" || !isAbsolute7(owner.gitDirectory) || Object.keys(owner).length !== 3)
       throw new Error("Invalid owner");
   } catch {
@@ -25943,23 +26080,23 @@ async function readCheckoutLastFeature(rootInput) {
   const metadata = gitMetadata(resolve8(rootInput));
   if (!metadata)
     return { git: false, feature: null };
-  const path = join10(dirname2(metadata.selectionPath), "last-feature");
+  const path = join11(dirname2(metadata.selectionPath), "last-feature");
   await assertGitMetadataPathSafe(metadata, path);
   return { git: true, feature: await readSelectionFile(path) };
 }
 function recoveryPath(metadata) {
-  return join10(dirname2(metadata.selectionPath), "terminal-features.json");
+  return join11(dirname2(metadata.selectionPath), "terminal-features.json");
 }
 async function readRecoveryFeatures(metadata) {
   const path = recoveryPath(metadata);
   await assertGitMetadataPathSafe(metadata, path);
-  const details2 = await lstat7(path).catch((error51) => {
+  const details2 = await lstat8(path).catch((error51) => {
     if (error51.code === "ENOENT")
       return null;
     throw error51;
   });
   if (!details2) {
-    const lastPath = join10(dirname2(metadata.selectionPath), "last-feature");
+    const lastPath = join11(dirname2(metadata.selectionPath), "last-feature");
     await assertGitMetadataPathSafe(metadata, lastPath);
     const legacy = await readSelectionFile(lastPath);
     return new Set(legacy ? [legacy] : []);
@@ -25967,7 +26104,7 @@ async function readRecoveryFeatures(metadata) {
   if (!details2.isFile() || details2.size > 1048576)
     throw new EmpiricalError("INVALID_CHECKOUT_RECOVERY", "Checkout recovery metadata is not a bounded regular file");
   try {
-    const value = JSON.parse(await readFile6(path, "utf8"));
+    const value = JSON.parse(await readFile7(path, "utf8"));
     if (!value || value.schemaVersion !== 1 || !Array.isArray(value.features) || value.features.length > MAX_RECOVERY_FEATURES || value.features.some((feature2) => typeof feature2 !== "string" || !isFeatureId(feature2)) || new Set(value.features).size !== value.features.length)
       throw new Error("Invalid recovery set");
     return new Set(value.features);
@@ -25986,7 +26123,7 @@ async function writeRecoveryFeatures(metadata, features) {
   await writeJsonAtomic(path, value);
 }
 async function withCheckoutRecoveryLock(metadata, operation2) {
-  const path = join10(dirname2(metadata.selectionPath), "recovery.lock");
+  const path = join11(dirname2(metadata.selectionPath), "recovery.lock");
   await assertGitMetadataPathSafe(metadata, path);
   return withOwnedFileLock(path, async () => {
     await assertGitMetadataPathSafe(metadata, path);
@@ -26024,7 +26161,7 @@ async function checkoutRuntimePath(rootInput, name) {
   const metadata = gitMetadata(resolve8(rootInput));
   if (!metadata)
     return null;
-  const path = join10(metadata.gitDirectory, "empirical-sdd", name);
+  const path = join11(metadata.gitDirectory, "empirical-sdd", name);
   const label = relative8(metadata.gitDirectory, path);
   if (!label.startsWith(`empirical-sdd${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute7(label) || label.split(/[\\/]/).includes("..")) {
     throw new EmpiricalError("UNSAFE_CHECKOUT_METADATA", `Checkout runtime file escapes Git metadata: ${path}`);
@@ -26038,7 +26175,7 @@ function gitMetadata(root) {
     return null;
   const git3 = resolveMaybe(root, directories[0]);
   const common = resolveMaybe(root, directories[1]);
-  const selection = join10(git3, "empirical-sdd", "active-feature");
+  const selection = join11(git3, "empirical-sdd", "active-feature");
   const label = relative8(git3, selection);
   if (!label || label === ".." || label.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute7(label)) {
     throw new EmpiricalError("UNSAFE_CHECKOUT_METADATA", `Checkout selection escapes Git metadata: ${selection}`);
@@ -26063,7 +26200,7 @@ function worktreePaths(root) {
   return result2.stdout.split("\x00").filter((line) => line.startsWith("worktree ")).map((line) => line.slice("worktree ".length));
 }
 async function readSelectionFile(path) {
-  const details2 = await lstat7(path).catch((error51) => {
+  const details2 = await lstat8(path).catch((error51) => {
     if (error51.code === "ENOENT")
       return null;
     throw error51;
@@ -26073,7 +26210,7 @@ async function readSelectionFile(path) {
   if (details2.isSymbolicLink() || !details2.isFile()) {
     throw new EmpiricalError("UNSAFE_CHECKOUT_METADATA", `Checkout selection is not a regular file: ${path}`);
   }
-  const feature2 = (await readFile6(path, "utf8")).trim();
+  const feature2 = (await readFile7(path, "utf8")).trim();
   if (!isFeatureId(feature2)) {
     throw new EmpiricalError("INVALID_FEATURE", `Checkout selection contains invalid feature '${feature2}'`);
   }
@@ -26083,8 +26220,8 @@ async function assertGitMetadataPathSafe(metadata, path = metadata.selectionPath
   const label = relative8(metadata.gitDirectory, path);
   let current = metadata.gitDirectory;
   for (const segment of label.split(/[\\/]/)) {
-    current = join10(current, segment);
-    const details2 = await lstat7(current).catch(() => null);
+    current = join11(current, segment);
+    const details2 = await lstat8(current).catch(() => null);
     if (!details2)
       break;
     if (details2.isSymbolicLink()) {
@@ -26122,16 +26259,16 @@ var init_checkouts = __esm(() => {
 import { randomUUID as randomUUID3 } from "node:crypto";
 import {
   mkdir as mkdir6,
-  lstat as lstat8,
+  lstat as lstat9,
   open as open3,
-  readFile as readFile7,
+  readFile as readFile8,
   readdir as readdir4,
   realpath as realpath8,
   rename as rename2,
   rm as rm4,
   stat as stat3
 } from "node:fs/promises";
-import { dirname as dirname3, isAbsolute as isAbsolute8, join as join11, relative as relative9, resolve as resolve9, sep as sep5, win32 as win322 } from "node:path";
+import { dirname as dirname3, isAbsolute as isAbsolute8, join as join12, relative as relative9, resolve as resolve9, sep as sep5, win32 as win322 } from "node:path";
 function isRecord3(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -26183,11 +26320,11 @@ async function writeJsonAtomic2(path, value) {
 `);
 }
 async function readJson2(path) {
-  const metadata = await lstat8(path);
+  const metadata = await lstat9(path);
   if (metadata.isSymbolicLink() || !metadata.isFile()) {
     throw new Error(`Coordination metadata must be a regular non-symbolic file: ${path}`);
   }
-  return JSON.parse(await readFile7(path, "utf8"));
+  return JSON.parse(await readFile8(path, "utf8"));
 }
 async function syncDirectory(path) {
   let handle;
@@ -26209,21 +26346,21 @@ async function syncDirectory(path) {
   }
 }
 async function ensurePlainDirectory(path) {
-  let metadata = await lstat8(path).catch((error51) => {
+  let metadata = await lstat9(path).catch((error51) => {
     if (error51.code === "ENOENT")
       return null;
     throw error51;
   });
   if (!metadata) {
     await mkdir6(path, { recursive: true });
-    metadata = await lstat8(path);
+    metadata = await lstat9(path);
   }
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new Error(`Coordination storage must be a regular directory: ${path}`);
   }
 }
 function identityContinuityPath(root) {
-  return join11(root, ".empirical", "identity.json");
+  return join12(root, ".empirical", "identity.json");
 }
 async function readRepositoryIdentityContinuity(root) {
   const record3 = await readJson2(identityContinuityPath(root)).catch((error51) => {
@@ -26242,12 +26379,12 @@ async function readCapabilityProjection(root, capability) {
   if (!CAPABILITY_ID.test(capability))
     throw new Error(`Invalid capability id: ${capability}`);
   const canonicalRoot = await realpath8(resolve9(root));
-  const empirical = join11(canonicalRoot, ".empirical");
-  const capabilities = join11(empirical, "capabilities");
-  const capabilityDirectory = join11(capabilities, capability);
-  const path = join11(capabilityDirectory, "spec.md");
+  const empirical = join12(canonicalRoot, ".empirical");
+  const capabilities = join12(empirical, "capabilities");
+  const capabilityDirectory = join12(capabilities, capability);
+  const path = join12(capabilityDirectory, "spec.md");
   for (const directory of [empirical, capabilities, capabilityDirectory]) {
-    const metadata2 = await lstat8(directory).catch((error51) => {
+    const metadata2 = await lstat9(directory).catch((error51) => {
       if (error51.code === "ENOENT")
         return null;
       throw error51;
@@ -26256,7 +26393,7 @@ async function readCapabilityProjection(root, capability) {
       throw new Error(`Capability storage must not use symbolic or special directories: ${directory}`);
     }
   }
-  const metadata = await lstat8(path).catch((error51) => {
+  const metadata = await lstat9(path).catch((error51) => {
     if (error51.code === "ENOENT")
       return null;
     throw error51;
@@ -26271,7 +26408,7 @@ async function readCapabilityProjection(root, capability) {
   if (rel === ".." || rel.startsWith(`..${sep5}`) || isAbsolute8(rel)) {
     throw new Error(`Capability projection resolves outside the repository: ${path}`);
   }
-  return readFile7(canonical, "utf8");
+  return readFile8(canonical, "utf8");
 }
 async function gitText(root, args, adapter) {
   const command = await executeCommandCaptured(root, {
@@ -26325,13 +26462,13 @@ async function resolveGitRepositoryIdentity(root, adapter) {
   };
 }
 function coordinationDirectory(identity) {
-  return join11(identity.commonDirectory, "empirical");
+  return join12(identity.commonDirectory, "empirical");
 }
 async function withCoordinationLock(directory, resource, operation2) {
   await ensurePlainDirectory(directory);
-  const locks = join11(directory, "locks");
+  const locks = join12(directory, "locks");
   await ensurePlainDirectory(locks);
-  return withOwnedFileLock(join11(locks, `${sha256(resource).slice(7)}.lock`), operation2);
+  return withOwnedFileLock(join12(locks, `${sha256(resource).slice(7)}.lock`), operation2);
 }
 async function withIntegrationTargetLock(root, targetRoot, operation2, adapter) {
   const [source, target] = await Promise.all([resolveGitRepositoryIdentity(root, adapter), resolveGitRepositoryIdentity(targetRoot, adapter)]);
@@ -26378,7 +26515,7 @@ async function registeredWorktrees(root, adapter) {
   return new Set(paths);
 }
 async function readClaims(identity, adapter, tolerateInvalid = false) {
-  const directory = join11(coordinationDirectory(identity), "claims");
+  const directory = join12(coordinationDirectory(identity), "claims");
   const worktrees = await registeredWorktrees(identity.root, adapter);
   const result2 = { active: [], stale: [], integrated: [], invalid: [] };
   if (!await exists(directory))
@@ -26389,9 +26526,9 @@ async function readClaims(identity, adapter, tolerateInvalid = false) {
       continue;
     try {
       if (!entry2.isFile()) {
-        throw new Error(`Capability claim must be a regular non-symbolic file: ${join11(directory, entry2.name)}`);
+        throw new Error(`Capability claim must be a regular non-symbolic file: ${join12(directory, entry2.name)}`);
       }
-      const claim = await readJson2(join11(directory, entry2.name));
+      const claim = await readJson2(join12(directory, entry2.name));
       verifyClaim(claim);
       if (entry2.name !== `${claim.id}.json`)
         throw new Error(`Capability claim filename does not match ${claim.id}.`);
@@ -26408,7 +26545,7 @@ async function readClaims(identity, adapter, tolerateInvalid = false) {
     } catch (error51) {
       if (!tolerateInvalid)
         throw error51;
-      result2.invalid.push({ path: join11(directory, entry2.name), error: error51 instanceof Error ? error51.message : String(error51) });
+      result2.invalid.push({ path: join12(directory, entry2.name), error: error51 instanceof Error ? error51.message : String(error51) });
     }
   }
   return result2;
@@ -26422,8 +26559,8 @@ async function readCapabilityClaim(root, id, adapter) {
   const identity = await resolveGitRepositoryIdentity(root, adapter);
   const directory = coordinationDirectory(identity);
   await ensurePlainDirectory(directory);
-  await ensurePlainDirectory(join11(directory, "claims"));
-  const claim = await readJson2(join11(directory, "claims", `${id}.json`));
+  await ensurePlainDirectory(join12(directory, "claims"));
+  const claim = await readJson2(join12(directory, "claims", `${id}.json`));
   verifyClaim(claim);
   if (claim.id !== id || !identity.acceptedRepositoryIds.includes(claim.repositoryId)) {
     throw new Error(`Capability claim ${id} has a mismatched identity.`);
@@ -26462,7 +26599,7 @@ async function recoverPortableCapabilityClaim(root, feature2, id, saved) {
     };
     const restored = { ...next, digest: digestJson(next) };
     verifyClaim(restored);
-    await writeExclusive(join11(directory, "claims", `${id}.json`), restored);
+    await writeExclusive(join12(directory, "claims", `${id}.json`), restored);
     return restored;
   }));
 }
@@ -26485,14 +26622,14 @@ async function transferCapabilityClaim(input) {
       heartbeatAt: (input.now ?? (() => new Date))().toISOString()
     };
     const next = { ...transferred, digest: digestJson(transferred) };
-    await writeJsonAtomic2(join11(coordinationDirectory(identity), "claims", `${claim.id}.json`), next);
+    await writeJsonAtomic2(join12(coordinationDirectory(identity), "claims", `${claim.id}.json`), next);
     return next;
   });
 }
 async function releaseCapabilityClaim(root, id, feature2) {
   const identity = await resolveGitRepositoryIdentity(root);
   return withCoordinationLock(coordinationDirectory(identity), `claim:${id}`, async () => {
-    const path = join11(coordinationDirectory(identity), "claims", `${id}.json`);
+    const path = join12(coordinationDirectory(identity), "claims", `${id}.json`);
     if (!await exists(path))
       return null;
     const claim = await readCapabilityClaim(root, id);
@@ -26507,7 +26644,7 @@ async function reinstateCapabilityClaim(root, claim) {
   const identity = await resolveGitRepositoryIdentity(root);
   verifyClaim(claim);
   await withCoordinationLock(coordinationDirectory(identity), `claim:${claim.id}`, async () => {
-    const path = join11(coordinationDirectory(identity), "claims", `${claim.id}.json`);
+    const path = join12(coordinationDirectory(identity), "claims", `${claim.id}.json`);
     if (await exists(path)) {
       const current = await readCapabilityClaim(root, claim.id);
       if (current.digest !== claim.digest) {
@@ -26521,7 +26658,7 @@ async function reinstateCapabilityClaim(root, claim) {
 async function dropStaleCapabilityClaim(root, id, expectedDigest) {
   const identity = await resolveGitRepositoryIdentity(root);
   return withCoordinationLock(coordinationDirectory(identity), `claim:${id}`, async () => {
-    const path = join11(coordinationDirectory(identity), "claims", `${id}.json`);
+    const path = join12(coordinationDirectory(identity), "claims", `${id}.json`);
     if (!await exists(path))
       return false;
     const claim = await readCapabilityClaim(root, id);
@@ -26540,7 +26677,7 @@ async function restoreCapabilityClaim(root, previous, expectedDigest) {
     const current = await readCapabilityClaim(root, previous.id);
     if (current.digest !== expectedDigest)
       throw new Error("Capability claim changed before transfer rollback.");
-    await writeJsonAtomic2(join11(coordinationDirectory(identity), "claims", `${previous.id}.json`), previous);
+    await writeJsonAtomic2(join12(coordinationDirectory(identity), "claims", `${previous.id}.json`), previous);
   });
 }
 function claimId(feature2, worktreeId) {
@@ -26600,7 +26737,7 @@ async function claimCapabilities(input) {
       heartbeatAt: timestamp
     };
     const claim = { ...body, digest: digestJson(body) };
-    await writeExclusive(join11(directory, "claims", `${id}.json`), claim);
+    await writeExclusive(join12(directory, "claims", `${id}.json`), claim);
     return { claim, stale: [], converged: false };
   }));
 }
@@ -26644,13 +26781,13 @@ async function reviseCapabilityClaim(input) {
     const { digest: _digest, ...body } = previous;
     const nextBody = { ...body, bases, capabilities: Object.keys(bases).sort(), heartbeatAt: new Date().toISOString() };
     const next = { ...nextBody, digest: digestJson(nextBody) };
-    await writeJsonAtomic2(join11(directory, "claims", `${previous.id}.json`), next);
+    await writeJsonAtomic2(join12(directory, "claims", `${previous.id}.json`), next);
     return next;
   }));
 }
 async function loadFeatureDeltas(root, feature2) {
-  const directory = join11(root, ".empirical", "specs", feature2, "deltas");
-  const metadata = await lstat8(directory);
+  const directory = join12(root, ".empirical", "specs", feature2, "deltas");
+  const metadata = await lstat9(directory);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new Error(`Capability delta storage must be a regular directory: ${directory}`);
   }
@@ -26660,10 +26797,10 @@ async function loadFeatureDeltas(root, feature2) {
     if (!entry2.name.endsWith(".md"))
       continue;
     if (!entry2.isFile()) {
-      throw new Error(`Capability delta must be a regular non-symbolic file: ${join11(directory, entry2.name)}`);
+      throw new Error(`Capability delta must be a regular non-symbolic file: ${join12(directory, entry2.name)}`);
     }
     const capability = entry2.name.slice(0, -3);
-    deltas.push(parseCapabilityDelta(capability, await readFile7(join11(directory, entry2.name), "utf8"), `.empirical/specs/${feature2}/deltas/${entry2.name}`));
+    deltas.push(parseCapabilityDelta(capability, await readFile8(join12(directory, entry2.name), "utf8"), `.empirical/specs/${feature2}/deltas/${entry2.name}`));
   }
   return deltas;
 }
@@ -26677,7 +26814,7 @@ async function integrationCandidates(targetRoot, claim, deltas) {
   const candidates = [];
   const issues = [];
   for (const capability of claim.capabilities) {
-    const path = join11(targetRoot, ".empirical", "capabilities", capability, "spec.md");
+    const path = join12(targetRoot, ".empirical", "capabilities", capability, "spec.md");
     const current = await readCapabilityProjection(targetRoot, capability);
     const base = claim.bases[capability];
     if (!base) {
@@ -26708,7 +26845,7 @@ async function integrateCapabilities(input) {
   }
   const directory = coordinationDirectory(identity);
   return withCheckoutLock(input.root, () => withFeatureLock(input.root, input.feature, () => withCoordinationLock(directory, `claim:${input.claimId}`, () => withIntegrationTargetLock(input.root, input.targetRoot, async (targetIdentity2) => {
-    const claimPath = join11(directory, "claims", `${input.claimId}.json`);
+    const claimPath = join12(directory, "claims", `${input.claimId}.json`);
     const claim = await readCapabilityClaim(input.root, input.claimId, input.adapter);
     if (claim.feature !== input.feature || claim.worktreeId !== identity.worktreeId || claim.status !== "active") {
       throw new Error(`Capability claim ${input.claimId} is not active for this feature worktree.`);
@@ -26773,12 +26910,12 @@ async function integrateCapabilities(input) {
     let receiptWritten = false;
     try {
       for (const candidate of candidates) {
-        const destination = join11(input.root, ".empirical", "capabilities", candidate.capability, "spec.md");
+        const destination = join12(input.root, ".empirical", "capabilities", candidate.capability, "spec.md");
         const original = await readCapabilityProjection(input.root, candidate.capability);
         await writeAtomic(destination, candidate.next);
         applied.push({ path: destination, original });
       }
-      receiptPath = join11(input.root, ".empirical", "specs", input.feature, "integration-receipt.json");
+      receiptPath = join12(input.root, ".empirical", "specs", input.feature, "integration-receipt.json");
       await writeExclusive(receiptPath, receipt);
       receiptWritten = true;
       const { digest: _claimDigest, ...claimBody } = claim;
@@ -27010,15 +27147,15 @@ var init_knowledge_config = __esm(() => {
 import { randomUUID as randomUUID4 } from "node:crypto";
 import {
   mkdir as mkdir7,
-  lstat as lstat9,
+  lstat as lstat10,
   open as open4,
-  readFile as readFile8,
+  readFile as readFile9,
   readdir as readdir5,
   rename as rename3,
   rm as rm5,
   stat as stat4
 } from "node:fs/promises";
-import { dirname as dirname4, join as join12 } from "node:path";
+import { dirname as dirname4, join as join13 } from "node:path";
 function assertDigest(value, label) {
   if (!/^sha256:[a-f0-9]{64}$/.test(value)) {
     throw new Error(`${label} is not a canonical SHA-256 digest.`);
@@ -27113,11 +27250,11 @@ function verifySnapshot(snapshot2, feature2) {
   }
 }
 async function readJson3(path) {
-  const metadata = await lstat9(path);
+  const metadata = await lstat10(path);
   if (metadata.isSymbolicLink() || !metadata.isFile()) {
     throw new Error(`Journal storage must be a regular non-symbolic file: ${path}`);
   }
-  return JSON.parse(await readFile8(path, "utf8"));
+  return JSON.parse(await readFile9(path, "utf8"));
 }
 async function exists2(path) {
   return stat4(path).then(() => true, (error51) => {
@@ -27177,10 +27314,10 @@ async function writeAtomic2(path, value) {
   }
 }
 function eventPath(directory, sequence) {
-  return join12(directory, `${String(sequence).padStart(8, "0")}.json`);
+  return join13(directory, `${String(sequence).padStart(8, "0")}.json`);
 }
 async function readJournal(directory, feature2) {
-  const snapshotPath = join12(directory, "snapshot.json");
+  const snapshotPath = join13(directory, "snapshot.json");
   const snapshot2 = await exists2(snapshotPath) ? await readJson3(snapshotPath) : null;
   if (snapshot2)
     verifySnapshot(snapshot2, feature2);
@@ -27204,7 +27341,7 @@ async function readJournal(directory, feature2) {
     if (fileSequence <= lastSequence) {
       throw new Error(`Journal event ${name} overlaps the compacted snapshot.`);
     }
-    const event = await readJson3(join12(directory, name));
+    const event = await readJson3(join13(directory, name));
     verifyJournalEvent(event, {
       sequence: lastSequence + 1,
       previousDigest: lastEventDigest,
@@ -27264,10 +27401,10 @@ async function maybeFault(point, requested) {
   }
 }
 async function finishCompaction(directory, transaction) {
-  const markerPath = join12(directory, "compaction.json");
-  const snapshotPath = join12(directory, "snapshot.json");
-  const candidatePath = join12(directory, "snapshot.candidate.json");
-  const previousPath = join12(directory, "snapshot.previous.json");
+  const markerPath = join13(directory, "compaction.json");
+  const snapshotPath = join13(directory, "snapshot.json");
+  const candidatePath = join13(directory, "snapshot.candidate.json");
+  const previousPath = join13(directory, "snapshot.previous.json");
   const boundaryPath = eventPath(directory, transaction.boundary.sequence);
   if (await exists2(candidatePath)) {
     if (await exists2(snapshotPath)) {
@@ -27304,7 +27441,7 @@ async function finishCompaction(directory, transaction) {
   for (const name of await readdir5(directory)) {
     const match = EVENT_NAME.exec(name);
     if (match && Number(match[1]) <= transaction.snapshot.lastSequence) {
-      await rm5(join12(directory, name), { force: true });
+      await rm5(join13(directory, name), { force: true });
     }
   }
   await rm5(candidatePath, { force: true });
@@ -27316,7 +27453,7 @@ async function finishCompaction(directory, transaction) {
   return promoted;
 }
 async function recoverCompaction(directory) {
-  const markerPath = join12(directory, "compaction.json");
+  const markerPath = join13(directory, "compaction.json");
   if (!await exists2(markerPath))
     return null;
   const transaction = await readJson3(markerPath);
@@ -27370,10 +27507,10 @@ async function compactJournal(input) {
     ...body,
     digest: transactionDigest(body)
   };
-  const markerPath = join12(input.directory, "compaction.json");
-  const candidatePath = join12(input.directory, "snapshot.candidate.json");
-  const snapshotPath = join12(input.directory, "snapshot.json");
-  const previousPath = join12(input.directory, "snapshot.previous.json");
+  const markerPath = join13(input.directory, "compaction.json");
+  const candidatePath = join13(input.directory, "snapshot.candidate.json");
+  const snapshotPath = join13(input.directory, "snapshot.json");
+  const previousPath = join13(input.directory, "snapshot.previous.json");
   await writeExclusive2(candidatePath, snapshot2);
   await writeExclusive2(markerPath, transaction);
   await maybeFault("after-prepare", input.faultAt);
@@ -27497,16 +27634,16 @@ Maintain this page from repository instructions and observed code.
 // src/migration.ts
 import { randomUUID as randomUUID5 } from "node:crypto";
 import {
-  lstat as lstat10,
+  lstat as lstat11,
   mkdir as mkdir8,
   open as open5,
-  readFile as readFile9,
+  readFile as readFile10,
   readdir as readdir6,
   rename as rename4,
   rm as rm6,
   stat as stat5
 } from "node:fs/promises";
-import { basename as basename2, dirname as dirname5, join as join13, relative as relative10, resolve as resolve10 } from "node:path";
+import { basename as basename2, dirname as dirname5, join as join14, relative as relative10, resolve as resolve10 } from "node:path";
 function record3(value, label) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${label} must be a JSON object.`);
@@ -27515,13 +27652,13 @@ function record3(value, label) {
 }
 async function readJson4(path) {
   try {
-    return JSON.parse(await readFile9(path, "utf8"));
+    return JSON.parse(await readFile10(path, "utf8"));
   } catch (error51) {
     throw new Error(`Could not read migration JSON ${path}: ${String(error51)}`);
   }
 }
 async function exists3(path) {
-  return lstat10(path).then(() => true, (error51) => {
+  return lstat11(path).then(() => true, (error51) => {
     if (error51.code === "ENOENT")
       return false;
     throw error51;
@@ -27596,7 +27733,7 @@ async function filesUnder(root, current = root) {
   const entries = await readdir6(current, { withFileTypes: true });
   const result2 = [];
   for (const entry2 of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-    const path = join13(current, entry2.name);
+    const path = join14(current, entry2.name);
     if (entry2.isSymbolicLink()) {
       throw new Error(`Schema migration refuses symbolic links: ${path}`);
     }
@@ -27614,8 +27751,8 @@ async function directoryDigest(root, excluded = new Set) {
   const files = (await filesUnder(root)).filter((path) => !excluded.has(path.replaceAll("\\", "/")));
   const inventory = [];
   for (const path of files) {
-    const absolute = join13(root, path);
-    const [bytes, metadata] = await Promise.all([readFile9(absolute), stat5(absolute)]);
+    const absolute = join14(root, path);
+    const [bytes, metadata] = await Promise.all([readFile10(absolute), stat5(absolute)]);
     inventory.push({
       path: path.replaceAll("\\", "/"),
       bytes: bytes.byteLength,
@@ -27626,7 +27763,7 @@ async function directoryDigest(root, excluded = new Set) {
   return digestJson(inventory);
 }
 async function assertPlainDirectory(path, label) {
-  const metadata = await lstat10(path);
+  const metadata = await lstat11(path);
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     throw new Error(`${label} must be a real directory, not a symbolic or special path: ${path}`);
   }
@@ -27634,8 +27771,8 @@ async function assertPlainDirectory(path, label) {
 async function copyDirectoryStrict(source, target) {
   await mkdir8(target, { recursive: false });
   for (const entry2 of (await readdir6(source, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))) {
-    const from = join13(source, entry2.name);
-    const to = join13(target, entry2.name);
+    const from = join14(source, entry2.name);
+    const to = join14(target, entry2.name);
     if (entry2.isSymbolicLink()) {
       throw new Error(`Schema migration refuses symbolic links: ${from}`);
     }
@@ -27737,7 +27874,7 @@ function transformState(value, acceptedSchemas = [4]) {
   return transformed;
 }
 async function deltaCapabilities(featureDirectory) {
-  const directory = join13(featureDirectory, "deltas");
+  const directory = join14(featureDirectory, "deltas");
   if (!await exists3(directory))
     return [];
   return (await readdir6(directory, { withFileTypes: true })).filter((entry2) => entry2.isFile() && /^[a-z0-9][a-z0-9-]*\.md$/.test(entry2.name)).map((entry2) => entry2.name.slice(0, -3)).sort();
@@ -27745,7 +27882,7 @@ async function deltaCapabilities(featureDirectory) {
 async function writeImpactAndLegacyEvidence(featureDirectory, state) {
   const capabilities = await deltaCapabilities(featureDirectory);
   const behavioral = state.profile === "complex" && capabilities.length > 0;
-  const deltaDirectory = join13(featureDirectory, "deltas");
+  const deltaDirectory = join14(featureDirectory, "deltas");
   const feature2 = basename2(featureDirectory);
   const parsedDeltas = [];
   if (await exists3(deltaDirectory)) {
@@ -27753,7 +27890,7 @@ async function writeImpactAndLegacyEvidence(featureDirectory, state) {
       if (!entry2.isFile() || !entry2.name.endsWith(".md"))
         continue;
       const capability = entry2.name.slice(0, -3);
-      parsedDeltas.push(parseCapabilityDelta(capability, await readFile9(join13(deltaDirectory, entry2.name), "utf8"), `.empirical/specs/${feature2}/deltas/${entry2.name}`));
+      parsedDeltas.push(parseCapabilityDelta(capability, await readFile10(join14(deltaDirectory, entry2.name), "utf8"), `.empirical/specs/${feature2}/deltas/${entry2.name}`));
     }
   }
   state.capabilityArchiveRequired = behavioral;
@@ -27771,7 +27908,7 @@ async function writeImpactAndLegacyEvidence(featureDirectory, state) {
     surfaces: ["legacy-schema-4-workflow"],
     regressionRationale: "Migrated history did not retain reviewable unarchived capability deltas; existing regression artifacts remain historical only."
   });
-  await writeReplace(join13(featureDirectory, "impact.json"), impact);
+  await writeReplace(join14(featureDirectory, "impact.json"), impact);
   state.impactDigest = impact.digest;
   const legacyNames = [
     "evidence.json",
@@ -27782,9 +27919,9 @@ async function writeImpactAndLegacyEvidence(featureDirectory, state) {
   ];
   const artifacts = [];
   for (const name of legacyNames) {
-    const path = join13(featureDirectory, name);
+    const path = join14(featureDirectory, name);
     if (await exists3(path)) {
-      const bytes = await readFile9(path);
+      const bytes = await readFile10(path);
       artifacts.push({ path: name, bytes: bytes.byteLength, digest: sha256(bytes) });
     }
   }
@@ -27797,30 +27934,30 @@ async function writeImpactAndLegacyEvidence(featureDirectory, state) {
       importedAssertions: Number(state.legacyEvidenceCount),
       summary: "Schema-4 evidence lacked executable provenance and is retained for history only."
     };
-    await writeReplace(join13(featureDirectory, "evidence", "legacy-import.json"), {
+    await writeReplace(join14(featureDirectory, "evidence", "legacy-import.json"), {
       ...body,
       digest: digestJson(body)
     });
   }
 }
 async function transformFeature(featureDirectory, feature2) {
-  const statePath = join13(featureDirectory, "state.json");
+  const statePath = join14(featureDirectory, "state.json");
   if (!await exists3(statePath))
     return false;
   const state = transformState(await readJson4(statePath));
   await writeImpactAndLegacyEvidence(featureDirectory, state);
-  const specPath = join13(featureDirectory, "spec.md");
+  const specPath = join14(featureDirectory, "spec.md");
   if (await exists3(specPath)) {
-    state.specDigest = sha256(await readFile9(specPath));
+    state.specDigest = sha256(await readFile10(specPath));
   }
-  const eventsDirectory = join13(featureDirectory, "events");
+  const eventsDirectory = join14(featureDirectory, "events");
   const legacyEvents = await exists3(eventsDirectory) ? (await readdir6(eventsDirectory, { withFileTypes: true })).filter((entry2) => entry2.isFile() && /^\d{8}\.json$/.test(entry2.name)).map((entry2) => entry2.name).sort() : [];
   const transformedEvents = [];
   let previousState = null;
   let previousDigest = journalGenesisDigest(feature2);
   let sequence = 1;
   for (const name of legacyEvents) {
-    const legacyEvent = record3(await readJson4(join13(eventsDirectory, name)), "Legacy event");
+    const legacyEvent = record3(await readJson4(join14(eventsDirectory, name)), "Legacy event");
     if (legacyEvent.schemaVersion !== 3 && legacyEvent.schemaVersion !== 4) {
       throw new Error(`Feature ${feature2} contains an unsupported historical event schema.`);
     }
@@ -27866,11 +28003,11 @@ async function transformFeature(featureDirectory, feature2) {
   await mkdir8(eventsDirectory, { recursive: true });
   for (const entry2 of await readdir6(eventsDirectory, { withFileTypes: true })) {
     if (entry2.isFile() && /^\d{8}\.json$/.test(entry2.name)) {
-      await rm6(join13(eventsDirectory, entry2.name));
+      await rm6(join14(eventsDirectory, entry2.name));
     }
   }
   for (const event of transformedEvents) {
-    await writeExclusive3(join13(eventsDirectory, `${String(event.sequence).padStart(8, "0")}.json`), event);
+    await writeExclusive3(join14(eventsDirectory, `${String(event.sequence).padStart(8, "0")}.json`), event);
   }
   await writeReplace(statePath, state);
   if (state.phase === "done" && state.status === "done") {
@@ -27884,8 +28021,8 @@ async function transformFeature(featureDirectory, feature2) {
   return true;
 }
 async function transformManifest(stage) {
-  const context = join13(stage, "context");
-  const manifestPath = join13(context, "manifest.json");
+  const context = join14(stage, "context");
+  const manifestPath = join14(context, "manifest.json");
   const old = await exists3(manifestPath) ? record3(await readJson4(manifestPath), "Repository knowledge manifest") : { files: [], truncated: false, digest: "" };
   const oldFiles = Array.isArray(old.files) ? old.files : [];
   const files = oldFiles.map((entry2) => {
@@ -27899,7 +28036,7 @@ async function transformManifest(stage) {
   const sourceDigest = digestJson(files);
   const pages = [];
   for (const name of ["overview.md", "architecture.md", "commands.md", "conventions.md"]) {
-    const path = join13(context, name);
+    const path = join14(context, name);
     const present = await exists3(path);
     const dependencies = files.filter((file2) => {
       if (name === "overview.md")
@@ -27911,7 +28048,7 @@ async function transformManifest(stage) {
       return /AGENTS|CONTRIBUTING|STYLE|CONVENTIONS|eslint|prettier|biome|tsconfig|ruff|clippy/i.test(file2.path);
     }).map((file2) => file2.path);
     const pageSourceDigest = digestJson(files.filter((file2) => dependencies.includes(file2.path)));
-    let contents = present ? await readFile9(path, "utf8") : null;
+    let contents = present ? await readFile10(path, "utf8") : null;
     const contextPath = `.empirical/context/${name}`;
     if (contents !== null && isLegacyRepositoryKnowledgeTemplate(contextPath, contents)) {
       contents = `${MANAGED_CONTEXT_MARKER}
@@ -27928,8 +28065,8 @@ ${contents}`;
       freshness: present ? "fresh" : "missing"
     });
   }
-  const indexPath = join13(context, "index.md");
-  let indexContents = await exists3(indexPath) ? await readFile9(indexPath, "utf8") : null;
+  const indexPath = join14(context, "index.md");
+  let indexContents = await exists3(indexPath) ? await readFile10(indexPath, "utf8") : null;
   if (indexContents !== null && !indexContents.startsWith(MANAGED_CONTEXT_MARKER)) {
     indexContents = `${MANAGED_CONTEXT_MARKER}
 ${indexContents}`;
@@ -27955,12 +28092,12 @@ ${indexContents}`;
   await writeReplace(manifestPath, { ...body, digest: digestJson(body) });
 }
 async function transformStage(stage, startedAt) {
-  const configPath = join13(stage, "config.json");
+  const configPath = join14(stage, "config.json");
   const legacyConfig = record3(await readJson4(configPath), "Project configuration");
   if (legacyConfig.schemaVersion !== 4) {
     throw new Error(`Expected Schema-4 config, got ${String(legacyConfig.schemaVersion)}.`);
   }
-  const policyPath = join13(stage, "policy.json");
+  const policyPath = join14(stage, "policy.json");
   const policy = migratePolicyV1(await readJson4(policyPath));
   const migratedPolicy = {
     ...policy,
@@ -27969,12 +28106,12 @@ async function transformStage(stage, startedAt) {
     }
   };
   await writeReplace(policyPath, migratedPolicy);
-  const specs = join13(stage, "specs");
+  const specs = join14(stage, "specs");
   let features = 0;
   if (await exists3(specs)) {
     for (const entry2 of (await readdir6(specs, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))) {
       if (entry2.isDirectory() && /^[a-z0-9][a-z0-9-]*$/.test(entry2.name)) {
-        if (await transformFeature(join13(specs, entry2.name), entry2.name))
+        if (await transformFeature(join14(specs, entry2.name), entry2.name))
           features += 1;
       }
     }
@@ -27994,26 +28131,26 @@ async function transformStage(stage, startedAt) {
 }
 async function validateSchema5(directory) {
   await assertPlainDirectory(directory, "Schema-5 candidate");
-  const config2 = record3(await readJson4(join13(directory, "config.json")), "Schema-5 config");
+  const config2 = record3(await readJson4(join14(directory, "config.json")), "Schema-5 config");
   if (config2.schemaVersion !== 5)
     throw new Error("Schema-5 validation found the wrong config version.");
-  parsePolicy(await readJson4(join13(directory, "policy.json")), dirname5(directory));
-  const contextManifestPath = join13(directory, "context", "manifest.json");
+  parsePolicy(await readJson4(join14(directory, "policy.json")), dirname5(directory));
+  const contextManifestPath = join14(directory, "context", "manifest.json");
   if (await exists3(contextManifestPath))
     validateManifestV2(await readJson4(contextManifestPath));
   let features = 0;
-  const specs = join13(directory, "specs");
+  const specs = join14(directory, "specs");
   if (await exists3(specs)) {
     for (const entry2 of await readdir6(specs, { withFileTypes: true })) {
       if (!entry2.isDirectory())
         continue;
-      const statePath = join13(specs, entry2.name, "state.json");
+      const statePath = join14(specs, entry2.name, "state.json");
       if (!await exists3(statePath))
         continue;
       const state = record3(await readJson4(statePath), `Feature ${entry2.name} state`);
       if (state.schemaVersion !== 5)
         throw new Error(`Feature ${entry2.name} was not migrated.`);
-      const impactPath = join13(specs, entry2.name, "impact.json");
+      const impactPath = join14(specs, entry2.name, "impact.json");
       if (!await exists3(impactPath)) {
         throw new Error(`Feature ${entry2.name} is missing its impact manifest.`);
       }
@@ -28023,7 +28160,7 @@ async function validateSchema5(directory) {
       } else {
         verifyImpactManifest(impact);
       }
-      const journal = await readJournal(join13(specs, entry2.name, "events"), entry2.name);
+      const journal = await readJournal(join14(specs, entry2.name, "events"), entry2.name);
       if (digestJson(journal.state) !== digestJson(state)) {
         throw new Error(`Feature ${entry2.name} state does not match its journal.`);
       }
@@ -28047,7 +28184,7 @@ function verifyMarker(marker, repositoryRoot) {
   if (digestJson(body) !== digest3)
     throw new Error("Migration marker failed its digest check.");
   const expectedRoot = resolve10(repositoryRoot);
-  if (resolve10(marker.root) !== expectedRoot || resolve10(marker.source) !== join13(expectedRoot, EMPIRICAL)) {
+  if (resolve10(marker.root) !== expectedRoot || resolve10(marker.source) !== join14(expectedRoot, EMPIRICAL)) {
     throw new Error("Migration marker does not belong to this repository.");
   }
   for (const [path, prefix] of [
@@ -28066,16 +28203,16 @@ async function writeMarker(path, marker) {
     await writeExclusive3(path, marker);
 }
 async function finalizeMigration(repositoryRoot, marker, recovered) {
-  const source = join13(repositoryRoot, EMPIRICAL);
+  const source = join14(repositoryRoot, EMPIRICAL);
   const validation = await validateSchema5(source);
   const resultDigest = await directoryDigest(source, new Set(["migrations/schema-4-to-5.json"]));
   if (resultDigest !== marker.stagedDigest) {
     throw new Error("Promoted Schema-5 directory differs from the staged migration digest.");
   }
-  const receiptDirectory = join13(source, "migrations");
+  const receiptDirectory = join14(source, "migrations");
   await mkdir8(receiptDirectory, { recursive: true });
   await syncDirectory3(source);
-  const receiptPath = join13(receiptDirectory, "schema-4-to-5.json");
+  const receiptPath = join14(receiptDirectory, "schema-4-to-5.json");
   const body = {
     schemaVersion: 1,
     from: 4,
@@ -28091,11 +28228,11 @@ async function finalizeMigration(repositoryRoot, marker, recovered) {
   if (!await exists3(receiptPath)) {
     await writeExclusive3(receiptPath, { ...body, digest: digestJson(body) });
   }
-  const failed = join13(repositoryRoot, `.empirical.schema5-failed-${marker.id}`);
+  const failed = join14(repositoryRoot, `.empirical.schema5-failed-${marker.id}`);
   await rm6(marker.backup, { recursive: true, force: true });
   await rm6(marker.stage, { recursive: true, force: true });
   await rm6(failed, { recursive: true, force: true });
-  await rm6(join13(repositoryRoot, MIGRATION_MARKER_NAME), { force: true });
+  await rm6(join14(repositoryRoot, MIGRATION_MARKER_NAME), { force: true });
   await syncDirectory3(repositoryRoot);
   return {
     from: 4,
@@ -28110,16 +28247,16 @@ async function finalizeMigration(repositoryRoot, marker, recovered) {
 }
 async function recoverSchema5Migration(repositoryRoot) {
   const root = resolve10(repositoryRoot);
-  const markerPath = join13(root, MIGRATION_MARKER_NAME);
+  const markerPath = join14(root, MIGRATION_MARKER_NAME);
   if (!await exists3(markerPath))
     return null;
   const marker = record3(await readJson4(markerPath), "Migration marker");
   verifyMarker(marker, root);
-  const source = join13(root, EMPIRICAL);
+  const source = join14(root, EMPIRICAL);
   try {
     if (await exists3(source)) {
       await assertPlainDirectory(source, "Migration source");
-      const config2 = record3(await readJson4(join13(source, "config.json")), "Migration source config");
+      const config2 = record3(await readJson4(join14(source, "config.json")), "Migration source config");
       if (config2.schemaVersion === 5) {
         return await finalizeMigration(root, marker, true);
       }
@@ -28147,7 +28284,7 @@ async function recoverSchema5Migration(repositoryRoot) {
           await rename4(source, marker.stage);
           await syncDirectory3(root);
         } else {
-          const failed = join13(root, `.empirical.schema5-failed-${marker.id}`);
+          const failed = join14(root, `.empirical.schema5-failed-${marker.id}`);
           if (!await exists3(failed)) {
             await rename4(source, failed);
             await syncDirectory3(root);
@@ -28171,11 +28308,11 @@ async function migrateSchema4To5(repositoryRoot, options = {}) {
   const recovered = await recoverSchema5Migration(root);
   if (recovered)
     return recovered;
-  const source = join13(root, EMPIRICAL);
+  const source = join14(root, EMPIRICAL);
   if (!await exists3(source))
     throw new Error("No .empirical directory exists to migrate.");
   await assertPlainDirectory(source, "Migration source");
-  const config2 = record3(await readJson4(join13(source, "config.json")), "Project config");
+  const config2 = record3(await readJson4(join14(source, "config.json")), "Project config");
   if (config2.schemaVersion === 5) {
     const validation = await validateSchema5(source);
     const digest3 = await directoryDigest(source, new Set(["migrations/schema-4-to-5.json"]));
@@ -28187,7 +28324,7 @@ async function migrateSchema4To5(repositoryRoot, options = {}) {
       features: validation.features,
       sourceDigest: digest3,
       resultDigest: digest3,
-      receipt: await exists3(join13(source, "migrations", "schema-4-to-5.json")) ? ".empirical/migrations/schema-4-to-5.json" : null
+      receipt: await exists3(join14(source, "migrations", "schema-4-to-5.json")) ? ".empirical/migrations/schema-4-to-5.json" : null
     };
   }
   if (config2.schemaVersion !== 4) {
@@ -28195,9 +28332,9 @@ async function migrateSchema4To5(repositoryRoot, options = {}) {
   }
   const sourceDigest = await directoryDigest(source);
   const id = randomUUID5();
-  const stage = join13(root, `${MIGRATION_STAGE_PREFIX}${id}`);
-  const backup = join13(root, `${MIGRATION_BACKUP_PREFIX}${id}`);
-  const markerPath = join13(root, MIGRATION_MARKER_NAME);
+  const stage = join14(root, `${MIGRATION_STAGE_PREFIX}${id}`);
+  const backup = join14(root, `${MIGRATION_BACKUP_PREFIX}${id}`);
+  const markerPath = join14(root, MIGRATION_MARKER_NAME);
   const startedAt = (options.now ?? (() => new Date))().toISOString();
   await copyDirectoryStrict(source, stage);
   await syncDirectory3(root);
@@ -28276,8 +28413,8 @@ __export(exports_finalization, {
 });
 import { spawnSync as spawnSync5 } from "node:child_process";
 import { realpathSync as realpathSync2 } from "node:fs";
-import { lstat as lstat11, readFile as readFile10, readdir as readdir7, readlink as readlink2 } from "node:fs/promises";
-import { join as join14, relative as relative11, resolve as resolve11 } from "node:path";
+import { lstat as lstat12, readFile as readFile11, readdir as readdir7, readlink as readlink2 } from "node:fs/promises";
+import { join as join15, relative as relative11, resolve as resolve11 } from "node:path";
 function gitProjectPrefix(root) {
   const result2 = spawnSync5("git", ["rev-parse", "--show-prefix"], { cwd: root, encoding: "utf8", shell: false });
   if (result2.error || result2.status !== 0)
@@ -28324,8 +28461,8 @@ async function finalizationArtifactsDigest(root, feature2, includeIntegrationOut
   const generated = new Set(["state.json", "completion.md", "closure.json", "state.lock", "events", "tracker", "evidence"]);
   const inventory = [];
   const visit = async (path) => {
-    const absolute = join14(root, path);
-    const info = await lstat11(absolute).catch((error51) => {
+    const absolute = join15(root, path);
+    const info = await lstat12(absolute).catch((error51) => {
       if (error51.code === "ENOENT")
         return null;
       throw error51;
@@ -28343,7 +28480,7 @@ async function finalizationArtifactsDigest(root, feature2, includeIntegrationOut
         await visit(`${path}/${name}`);
       }
     } else if (info.isFile()) {
-      inventory.push({ path, kind: "file", digest: sha256(await readFile10(absolute)) });
+      inventory.push({ path, kind: "file", digest: sha256(await readFile11(absolute)) });
     } else
       throw new EmpiricalError("FINALIZATION_ARTIFACTS_UNREADABLE", `Cannot bind non-file artifact ${path}.`);
   };
@@ -28452,13 +28589,6 @@ function reviewTriage(input) {
   const repairRoundSpent = changesRequested && input.reviewRoundsRequestingChanges >= 2;
   const deferredIds = findings.filter((finding) => !findingBlocks(finding) && deferred.has(finding.id)).map((finding) => finding.id);
   const exits = [];
-  const openPr = {
-    id: "open-pr",
-    label: repairRoundSpent ? "Converge: commit, push and open (or merge) the pull request, and track the remaining findings as follow-up tickets" : "Commit, push and open a draft pull request for this feature; leave the current findings visible for CI and follow-up work",
-    available: true
-  };
-  if (repairRoundSpent)
-    exits.push(openPr);
   if (changesRequested || open6.length > 0) {
     exits.push({
       id: "fix",
@@ -28484,8 +28614,6 @@ function reviewTriage(input) {
     });
   }
   if (changesRequested) {
-    if (!repairRoundSpent)
-      exits.push(openPr);
     exits.push({ id: "stop", label: "Stop this feature here and report its current completion level", available: true });
   }
   return {
@@ -28549,7 +28677,7 @@ var init_review_triage = __esm(() => {
 
 // src/review.ts
 import { homedir as homedir2 } from "node:os";
-import { join as join15 } from "node:path";
+import { join as join16 } from "node:path";
 function defaultRunner() {
   return async (root, argv, reviewerToken) => {
     const captured = await executeCommandCaptured(root, {
@@ -28572,15 +28700,15 @@ function githubCliConfigurationEnvironment(options = {}) {
     return { GH_CONFIG_DIR: explicit };
   const xdg = env.XDG_CONFIG_HOME?.trim();
   if (xdg)
-    return { GH_CONFIG_DIR: join15(xdg, "gh") };
+    return { GH_CONFIG_DIR: join16(xdg, "gh") };
   const appData = (env.APPDATA ?? env.AppData)?.trim();
   if (platform === "win32" && appData) {
-    return { GH_CONFIG_DIR: join15(appData, "GitHub CLI") };
+    return { GH_CONFIG_DIR: join16(appData, "GitHub CLI") };
   }
   if (!home.trim()) {
     throw new Error("GitHub CLI configuration requires an operating-system home directory.");
   }
-  return { GH_CONFIG_DIR: join15(home, ".config", "gh") };
+  return { GH_CONFIG_DIR: join16(home, ".config", "gh") };
 }
 function exactRedaction(value, secret) {
   return secret ? value.replaceAll(secret, "[REDACTED]") : value;
@@ -29267,7 +29395,7 @@ var init_review = __esm(() => {
 // src/delivery.ts
 import { spawnSync as spawnSync6 } from "node:child_process";
 import { homedir as homedir3 } from "node:os";
-import { isAbsolute as isAbsolute9, join as join16, relative as relative12, resolve as resolve12, sep as sep6 } from "node:path";
+import { isAbsolute as isAbsolute9, join as join17, relative as relative12, resolve as resolve12, sep as sep6 } from "node:path";
 function validateBranch(branch) {
   if (!BRANCH.test(branch) || branch.endsWith(".") || branch.endsWith("/")) {
     throw new Error(`Unsafe Git branch name: ${branch}`);
@@ -29302,15 +29430,15 @@ function githubCliConfigurationEnvironment2(options = {}) {
     return { GH_CONFIG_DIR: explicit };
   const xdg = env.XDG_CONFIG_HOME?.trim();
   if (xdg)
-    return { GH_CONFIG_DIR: join16(xdg, "gh") };
+    return { GH_CONFIG_DIR: join17(xdg, "gh") };
   const appData = (env.APPDATA ?? env.AppData)?.trim();
   if (platform === "win32" && appData) {
-    return { GH_CONFIG_DIR: join16(appData, "GitHub CLI") };
+    return { GH_CONFIG_DIR: join17(appData, "GitHub CLI") };
   }
   if (!home.trim()) {
     throw new Error("GitHub CLI configuration requires an operating-system home directory.");
   }
-  return { GH_CONFIG_DIR: join16(home, ".config", "gh") };
+  return { GH_CONFIG_DIR: join17(home, ".config", "gh") };
 }
 function githubAuthenticationEnvironment(argv, options = {}) {
   if (argv[0] === "gh") {
@@ -31215,7 +31343,7 @@ __export(exports_evidence, {
   collectArtifactRecords: () => collectArtifactRecords,
   appendReceipt: () => appendReceipt
 });
-import { lstat as lstat12, open as open6, readFile as readFile11, readlink as readlink3, realpath as realpath9, stat as stat6 } from "node:fs/promises";
+import { lstat as lstat13, open as open6, readFile as readFile12, readlink as readlink3, realpath as realpath9, stat as stat6 } from "node:fs/promises";
 import { readdir as readdir8 } from "node:fs/promises";
 import { spawnSync as spawnSync7 } from "node:child_process";
 import { dirname as dirname6, relative as relative13, resolve as resolve13 } from "node:path";
@@ -31278,7 +31406,7 @@ function ensureContained(root, artifact) {
 }
 async function resolveContainedRegularFile(root, artifact) {
   const absolute = ensureContained(root, artifact);
-  const metadata = await lstat12(absolute);
+  const metadata = await lstat13(absolute);
   if (metadata.isSymbolicLink() || !metadata.isFile()) {
     throw new Error(`Evidence artifact is not a regular non-symbolic file: ${artifact}`);
   }
@@ -31326,7 +31454,7 @@ async function collectArtifactRecords(root, items) {
       throw new Error(`Evidence artifact has an invalid media type: ${item.path}`);
     }
     const absolute = await resolveContainedRegularFile(root, item.path);
-    const [bytes, metadata] = await Promise.all([readFile11(absolute), stat6(absolute)]);
+    const [bytes, metadata] = await Promise.all([readFile12(absolute), stat6(absolute)]);
     if (!metadata.isFile()) {
       throw new Error(`Evidence artifact is not a regular file: ${item.path}`);
     }
@@ -31437,7 +31565,7 @@ async function validateReceipt(input, context) {
   if (receipt.kind === "collected") {
     for (const artifact of receipt.artifacts) {
       const absolute = await resolveContainedRegularFile(context.root, artifact.path);
-      const bytes = await readFile11(absolute);
+      const bytes = await readFile12(absolute);
       if (bytes.byteLength !== artifact.bytes || sha256(bytes) !== artifact.digest) {
         throw new EmpiricalError("RECEIPT_STALE", `Evidence receipt ${receipt.id} artifact was modified: ${artifact.path}`, { receiptId: receipt.id, changed: "artifact bytes" });
       }
@@ -31447,7 +31575,7 @@ async function validateReceipt(input, context) {
     for (const attempt of receipt.attempts) {
       for (const artifact of attempt.artifacts) {
         const absolute = await resolveContainedRegularFile(context.root, artifact.path);
-        const bytes = await readFile11(absolute);
+        const bytes = await readFile12(absolute);
         if (bytes.byteLength !== artifact.bytes || sha256(bytes) !== artifact.digest) {
           throw new EmpiricalError("RECEIPT_STALE", `Evidence receipt ${receipt.id} artifact was modified: ${artifact.path}`, { receiptId: receipt.id, changed: "artifact bytes" });
         }
@@ -31457,7 +31585,7 @@ async function validateReceipt(input, context) {
   return receipt;
 }
 async function readAndValidateReceipt(path, context) {
-  const raw = await readFile11(path, "utf8");
+  const raw = await readFile12(path, "utf8");
   return validateReceipt(JSON.parse(raw), context);
 }
 function receiptDirectoryForFeature(featureDir) {
@@ -31576,10 +31704,10 @@ async function repositoryTreeDigest(rootInput) {
   const inventory = [];
   for (const normalized of await treeCandidates(root)) {
     const lexical = ensureContained(root, normalized);
-    const linkMetadata = await lstat12(lexical).catch(() => null);
+    const linkMetadata = await lstat13(lexical).catch(() => null);
     if (!linkMetadata?.isFile() || linkMetadata.isSymbolicLink())
       continue;
-    const bytes = await readFile11(await resolveContainedRegularFile(root, normalized));
+    const bytes = await readFile12(await resolveContainedRegularFile(root, normalized));
     inventory.push({ path: normalized, bytes: bytes.byteLength, digest: sha256(bytes) });
   }
   return digestJson(inventory);
@@ -31590,7 +31718,7 @@ async function finalizationSourceDigest(rootInput) {
   const metadata = [];
   for (const path of await treeCandidates(root)) {
     const absolute = ensureContained(root, path);
-    const info = await lstat12(absolute).catch((error51) => {
+    const info = await lstat13(absolute).catch((error51) => {
       if (error51.code === "ENOENT")
         return null;
       throw error51;
@@ -31606,7 +31734,7 @@ async function finalizationSourceDigest(rootInput) {
       const oid = index.status === 0 ? /^160000 ([a-f0-9]{40,64}) 0\t/.exec(index.stdout)?.[1] : null;
       if (!oid)
         throw new EmpiricalError("FINALIZATION_SOURCE_UNREADABLE", `Cannot identify source directory ${path} as a submodule.`);
-      const gitFile = await lstat12(resolve13(absolute, ".git")).catch((error51) => {
+      const gitFile = await lstat13(resolve13(absolute, ".git")).catch((error51) => {
         if (error51.code === "ENOENT")
           return null;
         throw error51;
@@ -31630,11 +31758,11 @@ async function repositoryTreeDigests(rootInput) {
   const text = [];
   for (const normalized of await treeCandidates(root)) {
     const lexical = ensureContained(root, normalized);
-    const linkMetadata = await lstat12(lexical).catch(() => null);
+    const linkMetadata = await lstat13(lexical).catch(() => null);
     if (!linkMetadata?.isFile() || linkMetadata.isSymbolicLink())
       continue;
     const absolute = await resolveContainedRegularFile(root, normalized);
-    const bytes = await readFile11(absolute);
+    const bytes = await readFile12(absolute);
     const digest3 = sha256(bytes);
     inventory.push({ path: normalized, bytes: bytes.byteLength, digest: digest3 });
     const content = lineEndingNormalized(bytes, normalized);
@@ -31671,7 +31799,7 @@ function linkEntries(root) {
 async function scopeEntry(root, path, link) {
   const base = { path, ...link ? { link } : {} };
   const lexical = ensureContained(root, path);
-  const metadata = await lstat12(lexical).catch(() => null);
+  const metadata = await lstat13(lexical).catch(() => null);
   if (!metadata)
     return { ...base, missing: true };
   if (metadata.isSymbolicLink()) {
@@ -31679,19 +31807,19 @@ async function scopeEntry(root, path, link) {
   }
   if (!metadata.isFile())
     return { ...base, type: metadata.isDirectory() ? "directory" : "other" };
-  const bytes = lineEndingNormalized(await readFile11(await resolveContainedRegularFile(root, path)), path);
+  const bytes = lineEndingNormalized(await readFile12(await resolveContainedRegularFile(root, path)), path);
   return { ...base, bytes: bytes.byteLength, digest: sha256(bytes) };
 }
 async function symlinkTarget(root, link) {
   const lexical = ensureContained(root, link);
-  const metadata = await lstat12(lexical).catch(() => null);
+  const metadata = await lstat13(lexical).catch(() => null);
   let target;
   try {
     if (metadata?.isSymbolicLink()) {
       const [canonicalRoot, resolved] = await Promise.all([realpath9(root), realpath9(lexical)]);
       target = relative13(canonicalRoot, resolved);
     } else if (metadata?.isFile()) {
-      const text = (await readFile11(lexical, "utf8")).trim().replaceAll("\\", "/");
+      const text = (await readFile12(lexical, "utf8")).trim().replaceAll("\\", "/");
       if (!text || text.startsWith("/") || /^[A-Za-z]:/.test(text))
         return null;
       target = relative13(resolve13(root), resolve13(dirname6(lexical), text));
@@ -31720,7 +31848,7 @@ async function repositoryScopeDigest(rootInput, input) {
   const candidates = await treeCandidates(root);
   const symlinks = new Set;
   for (const path of candidates) {
-    if ((await lstat12(ensureContained(root, path)).catch(() => null))?.isSymbolicLink())
+    if ((await lstat13(ensureContained(root, path)).catch(() => null))?.isSymbolicLink())
       symlinks.add(path);
   }
   for (const [path, entry2] of links)
@@ -31797,7 +31925,7 @@ async function resolveWorkspaceScope(rootInput, argv, cwd) {
     paths: await treeCandidates(root),
     read: async (path) => {
       try {
-        return await readFile11(await resolveContainedRegularFile(root, path), "utf8");
+        return await readFile12(await resolveContainedRegularFile(root, path), "utf8");
       } catch {
         return null;
       }
@@ -31870,9 +31998,9 @@ var init_evidence = __esm(() => {
 });
 
 // src/storage.ts
-import { chmod, lstat as lstat13, open as open7, readFile as readFile12, readdir as readdir9, realpath as realpath10, rename as rename5, rm as rm7, rmdir, stat as stat7, mkdir as mkdir9 } from "node:fs/promises";
+import { chmod, lstat as lstat14, open as open7, readFile as readFile13, readdir as readdir9, realpath as realpath10, rename as rename5, rm as rm7, rmdir, stat as stat7, mkdir as mkdir9 } from "node:fs/promises";
 import { randomUUID as randomUUID6 } from "node:crypto";
-import { basename as basename3, dirname as dirname7, join as join17, resolve as resolve14 } from "node:path";
+import { basename as basename3, dirname as dirname7, join as join18, resolve as resolve14 } from "node:path";
 
 class ProjectStore {
   selection;
@@ -31888,48 +32016,48 @@ class ProjectStore {
     this.feature = feature2;
   }
   get directory() {
-    return join17(this.root, EMPIRICAL_DIR);
+    return join18(this.root, EMPIRICAL_DIR);
   }
   get configPath() {
-    return join17(this.directory, "config.json");
+    return join18(this.directory, "config.json");
   }
   get policyPath() {
-    return join17(this.directory, "policy.json");
+    return join18(this.directory, "policy.json");
   }
   get stateDirectory() {
     return this.specDirectory(this.requireFeature());
   }
   get statePath() {
-    return join17(this.stateDirectory, "state.json");
+    return join18(this.stateDirectory, "state.json");
   }
   get eventsDirectory() {
-    return join17(this.stateDirectory, "events");
+    return join18(this.stateDirectory, "events");
   }
   get capabilitiesDirectory() {
-    return join17(this.directory, "capabilities");
+    return join18(this.directory, "capabilities");
   }
   forFeature(feature2) {
     return new ProjectStore(this.root, feature2, this.selection, this.afterCommit);
   }
   capabilityDirectory(capability) {
     assertCapabilityId(capability);
-    return join17(this.capabilitiesDirectory, capability);
+    return join18(this.capabilitiesDirectory, capability);
   }
   capabilitySpecPath(capability) {
-    return join17(this.capabilityDirectory(capability), "spec.md");
+    return join18(this.capabilityDirectory(capability), "spec.md");
   }
   specDirectory(feature2) {
     assertFeatureId(feature2);
-    return join17(this.directory, "specs", feature2);
+    return join18(this.directory, "specs", feature2);
   }
   specPath(feature2) {
-    return join17(this.specDirectory(feature2), "spec.md");
+    return join18(this.specDirectory(feature2), "spec.md");
   }
   evidencePath(feature2) {
-    return join17(this.specDirectory(feature2), "evidence.json");
+    return join18(this.specDirectory(feature2), "evidence.json");
   }
   deltaDirectory(feature2) {
-    return join17(this.specDirectory(feature2), "deltas");
+    return join18(this.specDirectory(feature2), "deltas");
   }
   async exists() {
     return isFile(this.configPath);
@@ -31939,7 +32067,7 @@ class ProjectStore {
     if (this.feature) {
       await this.assertFeaturePathSafe(this.feature, [this.statePath, this.eventsDirectory]);
     }
-    await mkdir9(join17(this.directory, "specs"), { recursive: true });
+    await mkdir9(join18(this.directory, "specs"), { recursive: true });
     await mkdir9(this.capabilitiesDirectory, { recursive: true });
     if (this.feature)
       await mkdir9(this.eventsDirectory, { recursive: true });
@@ -32057,7 +32185,7 @@ class ProjectStore {
       }
       const scoped = this.forFeature(checkout.feature);
       await scoped.assertFeaturePathSafe(checkout.feature, [scoped.statePath, scoped.eventsDirectory]);
-      if (!await isFile(scoped.statePath) && !await isFile(join17(scoped.eventsDirectory, "00000001.json"))) {
+      if (!await isFile(scoped.statePath) && !await isFile(join18(scoped.eventsDirectory, "00000001.json"))) {
         throw new EmpiricalError("FEATURE_SELECTION_MISSING", `Selected feature ${checkout.feature} has no workflow state. Restore its state or explicitly repair this checkout's selector at ${checkout.selectionPath}.`);
       }
       const state = await scoped.loadState(recover);
@@ -32096,7 +32224,7 @@ class ProjectStore {
     return this.listFeatureIds();
   }
   async listFeatureIds() {
-    const directory = join17(this.directory, "specs");
+    const directory = join18(this.directory, "specs");
     if (await isSymbolicLink(directory)) {
       throw new EmpiricalError("UNSAFE_SPEC_PATH", `Feature storage cannot use symbolic links: ${directory}`);
     }
@@ -32110,7 +32238,7 @@ class ProjectStore {
     }
     const unsafe = entries.find((entry2) => entry2.isSymbolicLink() && isFeatureId2(entry2.name));
     if (unsafe) {
-      throw new EmpiricalError("UNSAFE_SPEC_PATH", `Feature storage cannot use symbolic links: ${join17(directory, unsafe.name)}`);
+      throw new EmpiricalError("UNSAFE_SPEC_PATH", `Feature storage cannot use symbolic links: ${join18(directory, unsafe.name)}`);
     }
     return entries.filter((entry2) => entry2.isDirectory() && isFeatureId2(entry2.name)).map((entry2) => entry2.name).sort();
   }
@@ -32169,9 +32297,9 @@ class ProjectStore {
           next.completionRecord = recordCompletion(next, prepared.actor, prepared.summary, prepared.decisionBy, await finalizationSourceDigest2(this.root), await finalizationArtifactsDigest2(this.root, this.requireFeature()));
         }
         if (next.completionRecord && next.completionRecord.digest !== current.completionRecord?.digest) {
-          const path = join17(this.specDirectory(this.requireFeature()), "completion.md");
+          const path = join18(this.specDirectory(this.requireFeature()), "completion.md");
           await this.assertFeaturePathSafe(this.requireFeature(), [path]);
-          const previous = await readFile12(path, "utf8").catch((error51) => {
+          const previous = await readFile13(path, "utf8").catch((error51) => {
             if (error51.code === "ENOENT")
               return null;
             throw error51;
@@ -32259,8 +32387,8 @@ ${renderCompletionRecord(next.completionRecord)}
     }
     await project.ensureProjectMetadata();
     return project.withResourceLock("specs", async () => {
-      const legacyStatePath = join17(project.directory, "state.json");
-      const legacyEvents = join17(project.directory, "events");
+      const legacyStatePath = join18(project.directory, "state.json");
+      const legacyEvents = join18(project.directory, "events");
       if (await pathExists2(legacyStatePath) || await pathExists2(legacyEvents)) {
         throw new EmpiricalError("MIGRATION_CONFLICT", "Schema 5 cannot contain legacy root workflow state; restore the Schema-4 backup and rerun the atomic migrator");
       }
@@ -32292,7 +32420,7 @@ ${renderCompletionRecord(next.completionRecord)}
   async readSpec(feature2) {
     await this.assertFeaturePathSafe(feature2, [this.specPath(feature2)]);
     try {
-      return await readFile12(this.specPath(feature2), "utf8");
+      return await readFile13(this.specPath(feature2), "utf8");
     } catch (error51) {
       throw new EmpiricalError("SPEC_NOT_FOUND", `Missing specification for ${feature2}`, error51);
     }
@@ -32322,7 +32450,7 @@ ${renderCompletionRecord(next.completionRecord)}
   async readCapability(capability) {
     await this.assertCapabilityPathSafe(capability);
     const path = this.capabilitySpecPath(capability);
-    return await isFile(path) ? readFile12(path, "utf8") : null;
+    return await isFile(path) ? readFile13(path, "utf8") : null;
   }
   async writeCapability(capability, contents) {
     await this.assertCapabilityPathSafe(capability);
@@ -32337,12 +32465,12 @@ ${renderCompletionRecord(next.completionRecord)}
     });
   }
   async withResourceLock(resource, operation2) {
-    return withFileLock(join17(this.directory, `${resource}.lock`), operation2);
+    return withFileLock(join18(this.directory, `${resource}.lock`), operation2);
   }
   async assertCurrentSchemaReadOnly(options = {}) {
     await this.assertProjectPathSafe();
     const config2 = await readJson(this.configPath, "PROJECT_NOT_INITIALIZED");
-    if (config2.schemaVersion !== SCHEMA_VERSION || await pathExists2(join17(this.directory, "state.json")) || await pathExists2(join17(this.directory, "events"))) {
+    if (config2.schemaVersion !== SCHEMA_VERSION || await pathExists2(join18(this.directory, "state.json")) || await pathExists2(join18(this.directory, "events"))) {
       throw new EmpiricalError("MIGRATION_REQUIRED", "This read-only operation requires Schema 5; migrate through an installed Empirical agent skill first");
     }
     for (const feature2 of await this.schemaValidationFeatures(options)) {
@@ -32358,7 +32486,7 @@ ${renderCompletionRecord(next.completionRecord)}
     }
   }
   eventPath(revision) {
-    return join17(this.eventsDirectory, `${String(revision).padStart(8, "0")}.json`);
+    return join18(this.eventsDirectory, `${String(revision).padStart(8, "0")}.json`);
   }
   async latestJournalState() {
     try {
@@ -32382,7 +32510,7 @@ ${renderCompletionRecord(next.completionRecord)}
     await writeJsonAtomic(this.statePath, state);
   }
   async withLock(operation2) {
-    return withFileLock(join17(this.stateDirectory, "state.lock"), operation2);
+    return withFileLock(join18(this.stateDirectory, "state.lock"), operation2);
   }
   requireFeature() {
     if (!this.feature) {
@@ -32405,7 +32533,7 @@ ${renderCompletionRecord(next.completionRecord)}
     assertFeatureId(feature2);
     const paths = [
       this.directory,
-      join17(this.directory, "specs"),
+      join18(this.directory, "specs"),
       this.specDirectory(feature2),
       ...additional
     ];
@@ -32418,7 +32546,7 @@ ${renderCompletionRecord(next.completionRecord)}
   async assertProjectPathSafe() {
     const paths = [
       this.directory,
-      join17(this.directory, "specs"),
+      join18(this.directory, "specs"),
       this.capabilitiesDirectory,
       this.configPath,
       this.policyPath
@@ -32457,7 +32585,7 @@ async function canonicalizeForExclusiveCreate(requested) {
   for (;; ) {
     try {
       const real = await realpath10(current);
-      return pending.length === 0 ? real : join17(real, ...[...pending].reverse());
+      return pending.length === 0 ? real : join18(real, ...[...pending].reverse());
     } catch {
       const parent = dirname7(current);
       if (parent === current)
@@ -32724,14 +32852,14 @@ async function isFile(path) {
 }
 async function isSymbolicLink(path) {
   try {
-    return (await lstat13(path)).isSymbolicLink();
+    return (await lstat14(path)).isSymbolicLink();
   } catch {
     return false;
   }
 }
 async function pathExists2(path) {
   try {
-    await lstat13(path);
+    await lstat14(path);
     return true;
   } catch (error51) {
     if (error51.code === "ENOENT")
@@ -32741,7 +32869,7 @@ async function pathExists2(path) {
 }
 async function readJson(path, code = "INVALID_JSON") {
   try {
-    return JSON.parse(await readFile12(path, "utf8"));
+    return JSON.parse(await readFile13(path, "utf8"));
   } catch (error51) {
     throw new EmpiricalError(code, `Could not read ${path}`, error51);
   }
@@ -33015,10 +33143,10 @@ var init_storage = __esm(() => {
 
 // src/integrations.ts
 init_activation();
-import { lstat as lstat14, readFile as readFile13, readdir as readdir10, readlink as readlink4, rm as rm8, rmdir as rmdir2 } from "node:fs/promises";
+import { lstat as lstat15, readFile as readFile14, readdir as readdir10, readlink as readlink4, rm as rm8, rmdir as rmdir2 } from "node:fs/promises";
 import { spawnSync as spawnSync8 } from "node:child_process";
 import { homedir as homedir4 } from "node:os";
-import { basename as basename4, dirname as dirname8, isAbsolute as isAbsolute10, join as join18, relative as relative14, resolve as resolve15, sep as sep7 } from "node:path";
+import { basename as basename4, dirname as dirname8, isAbsolute as isAbsolute10, join as join19, relative as relative14, resolve as resolve15, sep as sep7 } from "node:path";
 
 // src/agent-catalog.ts
 import { access, stat } from "node:fs/promises";
@@ -34402,19 +34530,21 @@ request outranks earlier specifications and Accepted decisions; do not report th
 Run no test, lint, typecheck or build unless the user asks; then run exactly that command (for a generic
 "run the tests", the repository's own test script) once through the shell — no \`empirical_qa_execute\`, no
 receipt, no matrix, no repair loop.
-Never merge, tag, publish, use credentials or run destructive Git without an explicit request; push
-and open pull requests only as Ship early below allows.
+Never merge, tag, publish, use credentials or run destructive Git without an explicit request; push only the agent's own feature branch.
+Open a pull request only when the user explicitly asks after implementation and the requested checks are complete.
 Call \`empirical_direct\` only for "go direct" (\`pause\`), "back to Empirical" (\`resume\`) and "track this"
 (\`track\`, or \`resume\` while the feature is paused); pause and resume take the exact revision.
 End a turn that changed files with \`Changed <X> in <N> files · not tested (not requested) · say "track this" to formalize\`,
 replacing the middle segment with \`ran <command>: passed\` or \`ran <command>: failed\` when a check was
 requested; when nothing changed, no such line appears.`;
-var SHIP_EARLY_BODY = `Open a draft pull request at the first coherent commit of feature work, then push every commit.
-Commits and pushes never wait on test runs: run requested or required tests for the change in the
-background, keep working and fold their results into later commits. Heavy or full-suite runs belong to pull-request CI; run them
-locally only with explicit approval. This push authority covers only the agent's own feature branch and
-draft pull requests: never merge, never push to a protected or target branch, never force push. When the
-repository has no remote or \`gh\` is unavailable, say so and continue locally.`;
+var BRANCH_PROGRESS_BODY = `Commit and push coherent work on the agent's own feature branch while requested or required checks run.
+Commits and branch pushes do not wait on test runs, but pull-request creation does. In Empirical work,
+never open a pull request during Implement, Review, or Verify; wait until Complex reaches verified
+Integrate. Fast finishes implemented and unverified, so promote it to Complex and complete verification
+before opening a pull request. In Direct mode, open one only when the user explicitly asks after
+implementation and the requested checks are complete. Heavy or full-suite runs may still belong to
+pull-request CI after that gate. Never merge, push to a protected or target branch, or force push. When
+the repository has no remote or \`gh\` is unavailable, say so and continue locally.`;
 var PROJECT_GUIDANCE = `${START}
 ## Empirical repository workflow
 
@@ -34422,9 +34552,9 @@ var PROJECT_GUIDANCE = `${START}
 
 ${DIRECT_MODE_BODY}
 
-### Ship early
+### Pull request readiness
 
-${SHIP_EARLY_BODY}
+${BRANCH_PROGRESS_BODY}
 
 Use the repository-local Empirical workflow automatically only when
 \`.empirical/config.json\` is valid with \`schemaVersion: 5\`,
@@ -34778,9 +34908,9 @@ var LOCAL_WORKFLOW_SKILL_BODY = `# Empirical
 
 ${DIRECT_MODE_BODY}
 
-## Ship early
+## Pull request readiness
 
-${SHIP_EARLY_BODY}
+${BRANCH_PROGRESS_BODY}
 
 ## Empirical workflow
 
@@ -34789,7 +34919,8 @@ Use Empirical only for work the user chooses to run through it.
 Explain unfamiliar warnings with docs/harness-guide.md and link the roadmap's help
 when present. Configuration choices and fixed rules are in docs/configuration.md;
 users can run \`empirical doctor --options\` directly. A pending feature never
-blocks independent work in another checkout, commits, or an authorized draft PR.
+blocks independent work in another checkout or commits. A pull request still
+requires completed implementation and feature verification.
 When the roadmap says fresh-context acceptance is covered by review, do not ask
 for another human QA record: no extra execution is required. UI outcome checks
 and stale reviews still need their own evidence. Use the plan's affected tests
@@ -34862,8 +34993,8 @@ only when the user has supplied that identity; never infer it from the agent act
    budget\`, marked over budget) when \`roadmap.time\` is present. Write \`none\`
    for an empty section. Also show \`Regression:\` for the newest \`roadmap.jobs\` entry (status, job, check, estimate, receipt or failing file count). When \`roadmap.time.over\` is true or a \`waitingOn\`
    decision names a checkpoint, stop at the checkpoint: show the card with the
-   exits (ship as is with a draft PR, split, defer non-blocking findings,
-   continue with a new budget, or stop) and wait. Never continue past an
+   exits (split, defer non-blocking findings, continue with a new budget, or
+   stop) and wait. Never continue past an
    exceeded budget without the user's choice; record continue only through
    \`empirical_checkpoint\` with the user's minutes and the exact revision. Show
    the card at start or resume, at every phase change, at every stop (Done,
@@ -35071,7 +35202,9 @@ only when the user has supplied that identity; never infer it from the agent act
    \`%APPDATA%\\Empirical\\secrets.env\` on Windows.
 8. Tests are on demand in both Fast and Complex. Do not run tests automatically
    while editing, after a modification, or just because a matrix or Verify action
-   is returned. Test runs never block a commit or push; follow Ship early above. Use \`empirical_qa_plan\` to inspect requirements without execution.
+   is returned. Test runs never block a commit or branch push, but pull requests
+   wait for verified Integrate; follow Pull request readiness above. Use
+   \`empirical_qa_plan\` to inspect requirements without execution.
    While iterating, run nothing unless the user asks. Map a request to an
    explicit \`verificationProfile\`: "run the changed tests" or "run the affected
    tests" is \`iterate\`, run once per request through \`empirical_qa_execute\`;
@@ -35108,7 +35241,7 @@ only when the user has supplied that identity; never infer it from the agent act
    approval, showing the exact command and its estimate; never start a full
    regression without the user's yes and never run it in the foreground. After recording that approval,
    start it with \`empirical_qa_start\` and \`userApproved: true\`, then keep
-   working: open or update the draft pull request instead of waiting. Check
+   working on the feature branch; open a pull request only after feature verification completes. Check
    \`empirical_qa_status\` at natural checkpoints (before reporting, before
    asking for review), never by polling in a loop; a running job is an
    informational \`Waiting on you\` item and never replaces the next action.
@@ -35124,8 +35257,7 @@ only when the user has supplied that identity; never infer it from the agent act
    command that covers the check (Verify needs one command per check, not the
    full suite); hand the full suite to pull-request CI; raise that command's
    \`timeoutMs\` in the policy up to the stated maximum (this changes the policy,
-   so earlier receipts need a new run); or stop, or ship as is with a draft
-   pull request (the checkpoint exits). Before starting any run whose estimate
+   so earlier receipts need a new run); or stop. Before starting any run whose estimate
    is near its command timeout or longer than ten minutes, offer the background
    run first. One exact full-CI
    receipt recorded at Integrate carries over to Deliver when commit, tree, spec,
@@ -35173,8 +35305,8 @@ only when the user has supplied that identity; never infer it from the agent act
    exact \`triage.failedCriteria\` and \`triage.blockingFindingIds\` that prevent
    review approval and explain the next repair. One repair round is the budget:
    when \`triage.mustChoose\` is true, stop and let the user choose from
-   \`triage.exits\`, converging first (open or merge the pull request and track
-   what remains), one more fix lap with its cost, or stop. Never start a
+   \`triage.exits\`: one more fix lap with its cost, or stop. A pull request
+   cannot substitute for incomplete verification. Never start a
    further lap without that choice; explain that it controls this feature only
    and does not approve a merge, release, or publication. Blocking findings and
    failed criteria are never deferred. After a fix, the next review packet
@@ -35209,7 +35341,7 @@ only when the user has supplied that identity; never infer it from the agent act
 11. When a packet carries \`featureSize\` with \`decisionPending\` (a large Complex
    feature), present the split option before implementing: propose small,
    independently shippable slices, each started as its own feature with its own
-   draft PR, or keep it as one. Record the user's choice with
+   draft PR after verification, or keep it as one. Record the user's choice with
    \`empirical_split_decision\` (keep requires a reason). It never blocks gates.
 12. When a feature genuinely cannot satisfy its next gate -- its pull request
    was merged outside the flow, the work was abandoned or superseded, or the
@@ -35383,7 +35515,7 @@ var EMPIRICAL_AGENT_SKILLS = Object.freeze(SKILLS.map((definition) => ({
       path: "SKILL.md",
       content: skillContent(definition.id, definition.description, SKILL_BODIES[definition.id], true)
     },
-    { path: join18("agents", "openai.yaml"), content: CODEX_EXPLICIT_ONLY_METADATA }
+    { path: join19("agents", "openai.yaml"), content: CODEX_EXPLICIT_ONLY_METADATA }
   ]
 })));
 var EMPIRICAL_AGENT_SKILL_NAMES = EMPIRICAL_AGENT_SKILLS.map((skill) => skill.name);
@@ -35440,12 +35572,12 @@ async function installProjectIntegrations(rootInput) {
   const mode = await projectActivationMode(root);
   for (const filename of ["AGENTS.md", "CLAUDE.md", "GEMINI.md"]) {
     if (mode === "automatic") {
-      await mergeManagedMarkdownBlock(root, join18(root, filename), PROJECT_GUIDANCE, report);
+      await mergeManagedMarkdownBlock(root, join19(root, filename), PROJECT_GUIDANCE, report);
     } else {
-      await removeManagedMarkdownBlock(root, join18(root, filename), report);
+      await removeManagedMarkdownBlock(root, join19(root, filename), report);
     }
   }
-  const codexOverride = join18(root, "AGENTS.override.md");
+  const codexOverride = join19(root, "AGENTS.override.md");
   if (await pathEntryExists(codexOverride)) {
     if (mode === "automatic") {
       await mergeManagedMarkdownBlock(root, codexOverride, PROJECT_GUIDANCE, report);
@@ -35458,20 +35590,20 @@ async function installProjectIntegrations(rootInput) {
     ".claude/skills/empirical/SKILL.md",
     ".windsurf/skills/empirical/SKILL.md"
   ]) {
-    await writeManagedFile(root, join18(root, ...skillPath.split("/")), localEmpiricalSkill(mode), report);
+    await writeManagedFile(root, join19(root, ...skillPath.split("/")), localEmpiricalSkill(mode), report);
   }
   if (mode === "explicit") {
-    await writeManagedFile(root, join18(root, LOCAL_INVOCATION_METADATA), CODEX_EXPLICIT_ONLY_METADATA, report);
+    await writeManagedFile(root, join19(root, LOCAL_INVOCATION_METADATA), CODEX_EXPLICIT_ONLY_METADATA, report);
   } else {
-    await removeManagedFile(root, join18(root, LOCAL_INVOCATION_METADATA), report);
+    await removeManagedFile(root, join19(root, LOCAL_INVOCATION_METADATA), report);
   }
   for (const path of obsoleteProjectTargets(root)) {
     await removeManagedFile(root, path, report);
   }
-  await mergeMcpJson(root, join18(root, ".mcp.json"), report);
-  await mergeMcpJson(root, join18(root, ".cursor", "mcp.json"), report);
-  await mergeMcpJson(root, join18(root, ".gemini", "settings.json"), report, { cwd: "." });
-  await mergeCodexToml(root, join18(root, ".codex", "config.toml"), report);
+  await mergeMcpJson(root, join19(root, ".mcp.json"), report);
+  await mergeMcpJson(root, join19(root, ".cursor", "mcp.json"), report);
+  await mergeMcpJson(root, join19(root, ".gemini", "settings.json"), report, { cwd: "." });
+  await mergeCodexToml(root, join19(root, ".codex", "config.toml"), report);
   const inspection = await inspectProjectIntegrations(root, { homeRoot: null });
   report.activation = projectActivationReport(report, inspection);
   return report;
@@ -35541,7 +35673,7 @@ async function inspectProjectIntegrations(rootInput, options = {}) {
       classify: inspectCodexBridge
     }
   ];
-  if (await pathEntryExists(join18(scope.root, "AGENTS.override.md"))) {
+  if (await pathEntryExists(join19(scope.root, "AGENTS.override.md"))) {
     targets.push({
       label: "AGENTS.override.md",
       runtime: "codex",
@@ -35552,13 +35684,13 @@ async function inspectProjectIntegrations(rootInput, options = {}) {
   if (mode === "explicit") {
     const retained = [];
     for (const target of targets) {
-      if (target.kind !== "instruction" || await pathEntryExists(join18(scope.root, target.label))) {
+      if (target.kind !== "instruction" || await pathEntryExists(join19(scope.root, target.label))) {
         retained.push(target);
       }
     }
     targets = retained;
   }
-  if (mode === "explicit" || await pathEntryExists(join18(scope.root, LOCAL_INVOCATION_METADATA))) {
+  if (mode === "explicit" || await pathEntryExists(join19(scope.root, LOCAL_INVOCATION_METADATA))) {
     targets.push({
       label: LOCAL_INVOCATION_METADATA,
       runtime: "codex",
@@ -35635,20 +35767,20 @@ async function installGlobalAgentSkills(homeRoot = homedir4(), options = {}) {
     if (selectedRoot) {
       for (const skill of EMPIRICAL_AGENT_SKILLS) {
         for (const artifact of skill.artifacts) {
-          await writeManagedFile(home, join18(skillRoot, skill.name, artifact.path), artifact.content, report);
+          await writeManagedFile(home, join19(skillRoot, skill.name, artifact.path), artifact.content, report);
         }
       }
     } else if (options.agents !== undefined || options.all) {
       for (const skill of EMPIRICAL_AGENT_SKILLS) {
         for (const artifact of skill.artifacts) {
-          await removeManagedFile(home, join18(skillRoot, skill.name, artifact.path), report);
+          await removeManagedFile(home, join19(skillRoot, skill.name, artifact.path), report);
         }
-        await removeEmptyDirectory(join18(skillRoot, skill.name));
+        await removeEmptyDirectory(join19(skillRoot, skill.name));
       }
     }
     for (const obsolete of OBSOLETE_GLOBAL_ENTRYPOINTS) {
       if (obsolete === "empirical" && selectedRoot && !await hasManagedCurrentGlobalSkill(home, skillRoot)) {
-        const legacy = join18(skillRoot, obsolete, "SKILL.md");
+        const legacy = join19(skillRoot, obsolete, "SKILL.md");
         if (await isSafeRegularFile(home, legacy)) {
           const label = `${relativeLabel(home, legacy)} (kept until empirical-init is fully installed)`;
           if (!report.preserved.includes(label))
@@ -35656,7 +35788,7 @@ async function installGlobalAgentSkills(homeRoot = homedir4(), options = {}) {
         }
         continue;
       }
-      await removeManagedFile(home, join18(skillRoot, obsolete, "SKILL.md"), report);
+      await removeManagedFile(home, join19(skillRoot, obsolete, "SKILL.md"), report);
     }
   }
   await reconcileCopilotMcpConfig(home, requestedIds.has("github-copilot"), report);
@@ -35676,12 +35808,12 @@ async function uninstallGlobalAgentSkills(homeRoot = homedir4()) {
   for (const [skillRoot] of groupedGlobalTargets(home)) {
     for (const skill of EMPIRICAL_AGENT_SKILLS) {
       for (const artifact of skill.artifacts) {
-        await removeManagedFile(home, join18(skillRoot, skill.name, artifact.path), report);
+        await removeManagedFile(home, join19(skillRoot, skill.name, artifact.path), report);
       }
-      await removeEmptyDirectory(join18(skillRoot, skill.name));
+      await removeEmptyDirectory(join19(skillRoot, skill.name));
     }
     for (const name of OBSOLETE_GLOBAL_ENTRYPOINTS) {
-      await removeManagedFile(home, join18(skillRoot, name, "SKILL.md"), report);
+      await removeManagedFile(home, join19(skillRoot, name, "SKILL.md"), report);
     }
   }
   await reconcileCopilotMcpConfig(home, false, report);
@@ -35703,22 +35835,22 @@ function emptyReport(scope) {
 }
 function obsoleteProjectTargets(root) {
   const legacySkills = OBSOLETE_PROJECT_ENTRYPOINTS.flatMap((name) => [
-    join18(root, ".agents", "skills", name, "SKILL.md"),
-    join18(root, ".claude", "skills", name, "SKILL.md"),
-    join18(root, ".windsurf", "skills", name, "SKILL.md")
+    join19(root, ".agents", "skills", name, "SKILL.md"),
+    join19(root, ".claude", "skills", name, "SKILL.md"),
+    join19(root, ".windsurf", "skills", name, "SKILL.md")
   ]);
   const legacyCommands = ["empirical", ...OBSOLETE_PROJECT_ENTRYPOINTS].flatMap((name) => [
-    join18(root, ".cursor", "commands", `${name}.md`),
-    join18(root, ".gemini", "commands", `${name}.toml`),
-    join18(root, ".windsurf", "workflows", `${name}.md`)
+    join19(root, ".cursor", "commands", `${name}.md`),
+    join19(root, ".gemini", "commands", `${name}.toml`),
+    join19(root, ".windsurf", "workflows", `${name}.md`)
   ]);
   return [...legacySkills, ...legacyCommands];
 }
 async function hasManagedGlobalTarget(home, definition) {
   const root = agentSkillTargetPath(home, definition);
   for (const name of [...EMPIRICAL_AGENT_SKILL_NAMES, ...OBSOLETE_GLOBAL_ENTRYPOINTS]) {
-    const path = join18(root, name, "SKILL.md");
-    if (await isSafeRegularFile(home, path) && (await readFile13(path, "utf8")).includes(MANAGED_FILE_MARKER)) {
+    const path = join19(root, name, "SKILL.md");
+    if (await isSafeRegularFile(home, path) && (await readFile14(path, "utf8")).includes(MANAGED_FILE_MARKER)) {
       return true;
     }
   }
@@ -35727,10 +35859,10 @@ async function hasManagedGlobalTarget(home, definition) {
 async function hasManagedCurrentGlobalSkill(home, root) {
   for (const skill of EMPIRICAL_AGENT_SKILLS) {
     for (const artifact of skill.artifacts) {
-      const path = join18(root, skill.name, artifact.path);
+      const path = join19(root, skill.name, artifact.path);
       if (!await isSafeRegularFile(home, path))
         return false;
-      if (!(await readFile13(path, "utf8")).includes(MANAGED_FILE_MARKER))
+      if (!(await readFile14(path, "utf8")).includes(MANAGED_FILE_MARKER))
         return false;
     }
   }
@@ -35764,11 +35896,11 @@ function groupedGlobalTargets(home) {
   return groups;
 }
 function globalSelectionPath(home) {
-  return join18(home, ".empirical-sdd", "integrations.json");
+  return join19(home, ".empirical-sdd", "integrations.json");
 }
 async function readGlobalSelection(home) {
   const path = globalSelectionPath(home);
-  const details2 = await lstat14(path).catch((error51) => {
+  const details2 = await lstat15(path).catch((error51) => {
     if (isMissingPathError(error51))
       return null;
     throw error51;
@@ -35823,7 +35955,7 @@ async function writeGlobalSelection(home, selected, report) {
   };
   const existed = await isFile(path);
   if (existed) {
-    const current = await readFile13(path, "utf8");
+    const current = await readFile14(path, "utf8");
     const desired = `${JSON.stringify(manifest, null, 2)}
 `;
     if (current === desired)
@@ -35863,8 +35995,8 @@ async function isSafeRegularFile(root, path) {
   const segments = label.split("/");
   let current = rootPath;
   for (let index = 0;index < segments.length; index += 1) {
-    current = join18(current, segments[index]);
-    const details2 = await lstat14(current).catch(() => null);
+    current = join19(current, segments[index]);
+    const details2 = await lstat15(current).catch(() => null);
     if (!details2 || details2.isSymbolicLink())
       return false;
     if (index < segments.length - 1 && !details2.isDirectory())
@@ -35879,15 +36011,15 @@ async function isSafeDirectory(root, path) {
   const targetPath = resolve15(path);
   const label = relativeLabel(rootPath, targetPath);
   if (label === "") {
-    const details2 = await lstat14(rootPath).catch(() => null);
+    const details2 = await lstat15(rootPath).catch(() => null);
     return Boolean(details2?.isDirectory() && !details2.isSymbolicLink());
   }
   if (label === ".." || label.startsWith("../") || isAbsolute10(label))
     return false;
   let current = rootPath;
   for (const segment of label.split("/")) {
-    current = join18(current, segment);
-    const details2 = await lstat14(current).catch(() => null);
+    current = join19(current, segment);
+    const details2 = await lstat15(current).catch(() => null);
     if (!details2 || details2.isSymbolicLink() || !details2.isDirectory())
       return false;
   }
@@ -35898,7 +36030,7 @@ async function safeInstructionAlias(root, path) {
     return null;
   if (!await isSafeDirectory(root, dirname8(path)))
     return null;
-  const details2 = await lstat14(path).catch((error51) => {
+  const details2 = await lstat15(path).catch((error51) => {
     if (isMissingPathError(error51))
       return null;
     throw error51;
@@ -35906,16 +36038,16 @@ async function safeInstructionAlias(root, path) {
   if (!details2?.isSymbolicLink())
     return null;
   const destination = await readlink4(path);
-  const name = CANONICAL_INSTRUCTION_NAMES.find((candidate) => destination === candidate || destination === `./${candidate}` || destination === `.${sep7}${candidate}` || destination === join18(dirname8(path), candidate));
+  const name = CANONICAL_INSTRUCTION_NAMES.find((candidate) => destination === candidate || destination === `./${candidate}` || destination === `.${sep7}${candidate}` || destination === join19(dirname8(path), candidate));
   if (!name)
     return null;
-  const target = join18(dirname8(path), name);
+  const target = join19(dirname8(path), name);
   return await isSafeRegularFile(root, target) ? target : null;
 }
 async function symlinkPlaceholder(root, path) {
   if (!CANONICAL_INSTRUCTION_NAMES.some((name) => name === basename4(path)))
     return null;
-  const details2 = await lstat14(path).catch(() => null);
+  const details2 = await lstat15(path).catch(() => null);
   if (!details2?.isFile() || details2.size > 1024)
     return null;
   const label = relativeLabel(resolve15(root), resolve15(path));
@@ -35926,11 +36058,11 @@ async function symlinkPlaceholder(root, path) {
   });
   if (listing.status !== 0 || listing.error || !listing.stdout.startsWith("120000 "))
     return null;
-  return (await readFile13(path, "utf8")).trim();
+  return (await readFile14(path, "utf8")).trim();
 }
 async function hasInstructionAlias(root, target) {
   for (const name of CANONICAL_INSTRUCTION_NAMES) {
-    const alias = join18(dirname8(target), name);
+    const alias = join19(dirname8(target), name);
     if (await safeInstructionAlias(root, alias) === target)
       return true;
     const placeholder = await symlinkPlaceholder(root, alias);
@@ -35960,7 +36092,7 @@ async function writeManagedFile(root, path, managed, report) {
     report.created.push(relativeLabel(root, path));
     return;
   }
-  const current = await readFile13(path, "utf8");
+  const current = await readFile14(path, "utf8");
   if (!current.includes(MANAGED_FILE_MARKER)) {
     report.preserved.push(`${relativeLabel(root, path)} (existing unmanaged file)`);
     return;
@@ -35975,7 +36107,7 @@ async function removeManagedFile(root, path, report) {
     return;
   if (!await isFile(path))
     return;
-  const current = await readFile13(path, "utf8");
+  const current = await readFile14(path, "utf8");
   if (!current.includes(MANAGED_FILE_MARKER)) {
     report.preserved.push(`${relativeLabel(root, path)} (existing unmanaged file)`);
     return;
@@ -35998,7 +36130,7 @@ async function removeManagedMarkdownBlock(root, path, report) {
     return;
   if (!await isFile(path))
     return;
-  const current = await readFile13(path, "utf8");
+  const current = await readFile14(path, "utf8");
   const starts = markerIndexes(current, START);
   const ends = markerIndexes(current, END);
   if (starts.length === 0 && ends.length === 0)
@@ -36026,7 +36158,7 @@ async function mergeManagedMarkdownBlock(root, path, managed, report) {
     report.created.push(relativeLabel(root, path));
     return;
   }
-  const current = await readFile13(path, "utf8");
+  const current = await readFile14(path, "utf8");
   const starts = markerIndexes(current, START);
   const ends = markerIndexes(current, END);
   if (starts.length === 1 && ends.length === 1 && ends[0] >= starts[0]) {
@@ -36089,7 +36221,7 @@ async function mergeMcpJson(root, path, report, extra = {}) {
   (existed ? report.updated : report.created).push(relativeLabel(root, path));
 }
 async function reconcileCopilotMcpConfig(home, enabled, report) {
-  const path = join18(home, ".copilot", "mcp-config.json");
+  const path = join19(home, ".copilot", "mcp-config.json");
   if (await preserveUnsafeTarget(home, path, report))
     return;
   const existed = await isFile(path);
@@ -36144,7 +36276,7 @@ async function mergeCodexToml(root, path, report) {
     report.created.push(relativeLabel(root, path));
     return;
   }
-  const current = await readFile13(path, "utf8");
+  const current = await readFile14(path, "utf8");
   const bridge = inspectCodexBridge(current).state;
   if (bridge === "current")
     return;
@@ -36180,12 +36312,12 @@ async function mergeCodexToml(root, path, report) {
   report.updated.push(relativeLabel(root, path));
 }
 async function inspectProjectActivationTarget(root, target) {
-  const path = join18(root, ...target.label.split("/"));
+  const path = join19(root, ...target.label.split("/"));
   const segments = target.label.split("/");
   let current = root;
   for (let index = 0;index < segments.length; index += 1) {
-    current = join18(current, segments[index]);
-    const details2 = await lstat14(current).catch((error51) => {
+    current = join19(current, segments[index]);
+    const details2 = await lstat15(current).catch((error51) => {
       if (isMissingPathError(error51))
         return null;
       throw error51;
@@ -36197,7 +36329,7 @@ async function inspectProjectActivationTarget(root, target) {
       if (target.kind === "instruction" && index === segments.length - 1) {
         const alias = await safeInstructionAlias(root, current);
         if (alias) {
-          const classification2 = target.classify(await readFile13(alias, "utf8"));
+          const classification2 = target.classify(await readFile14(alias, "utf8"));
           return activationSurface(target, classification2.state, `Direct alias to ${relativeLabel(root, alias)}${classification2.detail ? `: ${classification2.detail}` : ""}`);
         }
       }
@@ -36216,7 +36348,7 @@ async function inspectProjectActivationTarget(root, target) {
       return activationSurface(target, "symlink-placeholder", `Git records this file as a symbolic link to ${placeholder}, but this checkout wrote it as a regular file containing only the link text`);
     }
   }
-  const classification = target.classify(await readFile13(path, "utf8"));
+  const classification = target.classify(await readFile14(path, "utf8"));
   return activationSurface(target, classification.state, classification.detail);
 }
 function activationSurface(target, state, detail) {
@@ -36291,10 +36423,10 @@ async function resolveProjectInspectionScope(rootInput, invocationInput) {
   let current = invocationPath;
   let gitBoundary = null;
   while (true) {
-    if (await isSafeRegularFile(current, join18(current, ".empirical", "config.json"))) {
+    if (await isSafeRegularFile(current, join19(current, ".empirical", "config.json"))) {
       return { root: current, invocationPath };
     }
-    if (await pathEntryExists(join18(current, ".git"))) {
+    if (await pathEntryExists(join19(current, ".git"))) {
       gitBoundary = current;
       break;
     }
@@ -36306,7 +36438,7 @@ async function resolveProjectInspectionScope(rootInput, invocationInput) {
   return { root: gitBoundary ?? requestedRoot, invocationPath };
 }
 async function inspectionDirectory(path) {
-  const details2 = await lstat14(path).catch((error51) => {
+  const details2 = await lstat15(path).catch((error51) => {
     if (isMissingPathError(error51))
       return null;
     throw error51;
@@ -36322,7 +36454,7 @@ function inspectionDirectories(root, invocationPath) {
   const result2 = [root];
   let current = root;
   for (const segment of label.split("/")) {
-    current = join18(current, segment);
+    current = join19(current, segment);
     result2.push(current);
   }
   return result2;
@@ -36348,7 +36480,7 @@ async function inspectNonCanonicalActivationPaths(root, invocationPath) {
     for (const entry2 of entries) {
       const lower = entry2.name.toLowerCase();
       if (lower === "agent.md" || canonicalLower.has(lower) && !canonical.has(entry2.name)) {
-        findings.add(relativeLabel(root, join18(directory, entry2.name)));
+        findings.add(relativeLabel(root, join19(directory, entry2.name)));
       }
     }
   }
@@ -36376,7 +36508,7 @@ async function findNonCanonicalCasePaths(root, expected) {
         continue;
       const entries = await readdir10(candidate.path, { withFileTypes: true });
       for (const entry2 of entries.filter((current) => current.name.toLowerCase() === segment.toLowerCase()).sort((left, right) => left.name.localeCompare(right.name))) {
-        const path = join18(candidate.path, entry2.name);
+        const path = join19(candidate.path, entry2.name);
         const changed = candidate.changed || entry2.name !== segment;
         if (last) {
           if (changed)
@@ -36403,7 +36535,7 @@ async function inspectShadowingActivation(root, invocationPath, mode) {
   for (let index = 0;index < directories.length; index += 1) {
     const filenames = index === 0 ? ["CLAUDE.local.md"] : ["AGENTS.override.md", "AGENTS.md", "CLAUDE.md", "CLAUDE.local.md", "GEMINI.md"];
     for (const filename of filenames) {
-      const path = join18(directories[index], filename);
+      const path = join19(directories[index], filename);
       if (!await pathEntryExists(path))
         continue;
       const label = relativeLabel(root, path);
@@ -36412,7 +36544,7 @@ async function inspectShadowingActivation(root, invocationPath, mode) {
         findings.add(`${label} (unsafe nested instruction source)`);
         continue;
       }
-      const classification = classifyProjectInstruction(await readFile13(source, "utf8"), mode);
+      const classification = classifyProjectInstruction(await readFile14(source, "utf8"), mode);
       if (classification.state !== "current" && classification.state !== "unmanaged") {
         findings.add(`${label} (${classification.state} nested instruction source)`);
       }
@@ -36458,9 +36590,9 @@ async function inspectShadowingActivation(root, invocationPath, mode) {
       findings.add(`${label} (claudeMdExcludes filters CLAUDE.md)`);
     }
   }
-  const codexConfig = join18(root, ".codex", "config.toml");
+  const codexConfig = join19(root, ".codex", "config.toml");
   if (mode === "automatic" && await isSafeRegularFile(root, codexConfig)) {
-    const contents = await readFile13(codexConfig, "utf8");
+    const contents = await readFile14(codexConfig, "utf8");
     const match = /^\s*project_doc_max_bytes\s*=\s*(\d+)\s*$/m.exec(contents);
     if (match && Number(match[1]) < Buffer.byteLength(PROJECT_GUIDANCE, "utf8")) {
       findings.add(".codex/config.toml (project_doc_max_bytes truncates the Empirical instruction block)");
@@ -36469,24 +36601,24 @@ async function inspectShadowingActivation(root, invocationPath, mode) {
   return [...findings].sort();
 }
 async function readSafeJsonObject(root, label) {
-  const path = join18(root, ...label.split("/"));
+  const path = join19(root, ...label.split("/"));
   if (!await isSafeRegularFile(root, path))
     return null;
   try {
-    const value = JSON.parse(await readFile13(path, "utf8"));
+    const value = JSON.parse(await readFile14(path, "utf8"));
     return isRecord5(value) ? value : null;
   } catch {
     return null;
   }
 }
 async function inspectJsonSettingsIssue(root, label) {
-  const path = join18(root, ...label.split("/"));
+  const path = join19(root, ...label.split("/"));
   if (!await pathEntryExists(path))
     return null;
   if (!await isSafeRegularFile(root, path))
     return "unsafe settings path";
   try {
-    return isRecord5(JSON.parse(await readFile13(path, "utf8"))) ? null : "settings document is not a JSON object";
+    return isRecord5(JSON.parse(await readFile14(path, "utf8"))) ? null : "settings document is not a JSON object";
   } catch {
     return "settings document contains malformed JSON";
   }
@@ -36496,10 +36628,10 @@ async function inspectGlobalSkillCollisions(homeInput) {
   const findings = new Set;
   for (const runtime of PROJECT_ACTIVATION_RUNTIMES) {
     for (const label of runtime.globalSkillPaths) {
-      const path = join18(home, ...label.split("/"));
+      const path = join19(home, ...label.split("/"));
       if (!await pathEntryExists(path))
         continue;
-      const state = await isSafeRegularFile(home, path) ? classifyProjectSkill(await readFile13(path, "utf8")).state : "unsafe";
+      const state = await isSafeRegularFile(home, path) ? classifyProjectSkill(await readFile14(path, "utf8")).state : "unsafe";
       const precedence = runtime.globalPrecedence === "global" ? "global skill overrides the project skill" : runtime.globalPrecedence === "project" ? "project skill overrides the global skill" : runtime.globalPrecedence === "coexists" ? "same-name global and project skills may both be visible" : "runtime precedence is unverified";
       findings.add(`${runtime.agent}: ${label} (${state}; ${precedence})`);
     }
@@ -36518,7 +36650,7 @@ function projectActivationReport(report, inspection) {
   };
 }
 async function pathEntryExists(path) {
-  return lstat14(path).then(() => true, (error51) => {
+  return lstat15(path).then(() => true, (error51) => {
     if (isMissingPathError(error51))
       return false;
     throw error51;
@@ -36545,10 +36677,10 @@ async function preserveUnsafeTarget(root, path, report) {
   const segments = label.split("/");
   let current = rootPath;
   for (let index = 0;index < segments.length; index += 1) {
-    current = join18(current, segments[index]);
+    current = join19(current, segments[index]);
     let details2;
     try {
-      details2 = await lstat14(current);
+      details2 = await lstat15(current);
     } catch (error51) {
       if (isMissingPathError(error51))
         return false;

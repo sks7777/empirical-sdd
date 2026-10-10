@@ -13,6 +13,22 @@ export interface AffectedTest {
 export declare function affectedTests(root: string, changed: readonly string[]): AffectedTest[];
 export declare function selectChangedTests(root: string, changed: readonly string[]): string[];
 /**
+ * Test paths listed under an `## Affected tests` heading of a plan, in order.
+ * Each list item contributes its first test-file path, backticked or bare;
+ * globs and prose-only items are ignored.
+ */
+export declare function declaredTests(plan: string): string[];
+export interface TestSelection {
+    method: "plan-declared" | "relative-imports-and-name-mapping";
+    files: AffectedTest[];
+}
+/**
+ * A plan that declares its affected tests is the selection: those tests plus
+ * any changed test files, with no import-graph fan-out. Declared files that no
+ * longer exist are dropped; when none remain, the import graph decides.
+ */
+export declare function selectTests(root: string, changed: readonly string[], declared?: readonly string[]): TestSelection;
+/**
  * The argv to execute for a configured command. Commands that opt into
  * `testFiles: "changed"` receive only matching test paths and never fall back
  * to their bare argv, which would usually run the whole suite.
